@@ -34,7 +34,7 @@ class UserController {
   async getUser(req, res, next) {
     try {
       const { username } = req.params;
-
+      
       if (!username) {
         throw ApiError.badRequest('Username parameter is required');
       }
@@ -297,7 +297,10 @@ class UserController {
 
       // Fetch complete data from Instagram
       const instagramData = await this.instagramService.getCompleteUserData(username, 12);
-
+      console.log("below is user data")
+      console.log("Instagram Data:", JSON.stringify(instagramData, null, 2));
+      console.log("new line start");
+      
       // Save user profile
       const user = await this.databaseService.upsertUser(instagramData.profile);
       userId = user._id;
