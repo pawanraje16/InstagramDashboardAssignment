@@ -11,13 +11,10 @@ function App() {
 
   const handleUserSearch = async (username) => {
     try {
-      console.log('🔍 App: Starting search for:', username);
       const result = await dispatch(fetchUserDashboard(username)).unwrap();
-      console.log('🔍 App: Search completed, result:', result);
       setCurrentView('dashboard');
     } catch (error) {
       console.error('❌ App: Error fetching user data:', error);
-      // You can show error message here or stay on landing page
     }
   }
 

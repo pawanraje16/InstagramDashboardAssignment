@@ -12,13 +12,6 @@ const DashboardPage = ({ onBackToHome, onNewSearch }) => {
   const dispatch = useDispatch();
   const { profile, posts, reels, loading, currentUser } = useSelector((state) => state.user);
 
-  // Debug logging
-  console.log('🔍 DashboardPage Debug:', {
-    reduxState: { profile: profile?.username, posts, reels, loading, currentUser },
-    postsLength: posts?.length,
-    reelsLength: reels?.length,
-    profileExists: !!profile
-  });
 
   const handleRefresh = () => {
     if (currentUser) {
