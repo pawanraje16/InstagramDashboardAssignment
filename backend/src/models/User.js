@@ -17,45 +17,23 @@ const UserSchema = new mongoose.Schema({
     index: true
   },
 
-  // Profile Information
+  // Profile Information (Core Requirements Only)
   profile: {
     full_name: String,
-    biography: String,
     profile_pic_url: String,
-    external_url: String,
     is_verified: { type: Boolean, default: false },
-    is_business: { type: Boolean, default: false },
-    is_private: { type: Boolean, default: false },
 
-    // Follower Metrics
+    // Follower Metrics (Basic Information - Mandatory)
     followers: { type: Number, default: 0 },
     following: { type: Number, default: 0 },
     posts_count: { type: Number, default: 0 }
   },
 
-  // Analytics Metrics
+  // Analytics Metrics (Core Requirements Only)
   analytics: {
-    influence_score: { type: Number, default: 0, min: 0, max: 100 },
     engagement_rate: { type: Number, default: 0 },
     avg_likes: { type: Number, default: 0 },
-    avg_comments: { type: Number, default: 0 },
-
-    // Content breakdown
-    content_types: {
-      images: { type: Number, default: 0 },
-      videos: { type: Number, default: 0 },
-      carousels: { type: Number, default: 0 },
-      reels: { type: Number, default: 0 }
-    },
-
-    // Growth metrics (calculated over time)
-    growth_rate: { type: Number, default: 0 },
-    best_posting_times: [String],
-    top_hashtags: [{ tag: String, count: Number }],
-
-    // Performance indicators
-    quality_score: { type: Number, default: 0 },
-    consistency_score: { type: Number, default: 0 }
+    avg_comments: { type: Number, default: 0 }
   },
 
   // Scraping Metadata

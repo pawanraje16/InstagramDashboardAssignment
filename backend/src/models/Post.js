@@ -23,7 +23,7 @@ const PostSchema = new mongoose.Schema({
     index: true
   },
 
-  // Post Content
+  // Post Content (Core Requirements)
   media_type: {
     type: String,
     enum: ['image', 'video', 'carousel', 'reel'],
@@ -34,11 +34,11 @@ const PostSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  display_url: String,
+  display_url: String, // Post image/thumbnail
   video_url: String,
   thumbnail_url: String,
 
-  // Engagement Metrics
+  // Engagement Metrics (Post-Level Data - Important)
   likes: {
     type: Number,
     default: 0,
@@ -85,67 +85,8 @@ const PostSchema = new mongoose.Schema({
     lng: Number
   },
 
-  // AI-Generated Content Analysis
-  analysis: {
-    // Auto-generated tags
-    tags: [{
-      name: String,
-      confidence: Number,
-      category: {
-        type: String,
-        enum: ['food', 'travel', 'fashion', 'lifestyle', 'business', 'fitness', 'beauty', 'technology', 'art', 'other']
-      }
-    }],
-
-    // Vibe/Ambience Classification
-    vibe: {
-      primary: {
-        type: String,
-        enum: ['casual', 'aesthetic', 'luxury', 'professional', 'artistic', 'vintage', 'minimal', 'vibrant']
-      },
-      secondary: [String],
-      confidence: Number
-    },
-
-    // Quality Indicators
-    quality: {
-      overall_score: { type: Number, min: 0, max: 100 },
-      lighting_score: { type: Number, min: 0, max: 100 },
-      composition_score: { type: Number, min: 0, max: 100 },
-      visual_appeal_score: { type: Number, min: 0, max: 100 },
-      consistency_score: { type: Number, min: 0, max: 100 }
-    },
-
-    // Content Description
-    description: String,
-    keywords: [String],
-
-    // Colors
-    dominant_colors: [{
-      color: String, // hex code
-      percentage: Number
-    }],
-
-    // Objects detected
-    objects: [{
-      name: String,
-      confidence: Number,
-      bounding_box: {
-        x: Number,
-        y: Number,
-        width: Number,
-        height: Number
-      }
-    }],
-
-    // Faces detected
-    faces: {
-      count: Number,
-      emotions: [String],
-      age_range: String,
-      gender: String
-    }
-  },
+  // TODO: AI-Generated Content Analysis (Hold for later implementation)
+  // Will include: auto-generated tags, vibe classification, quality indicators
 
   // Performance Metrics
   performance: {
