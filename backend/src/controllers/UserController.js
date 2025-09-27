@@ -476,12 +476,15 @@ class UserController {
       // Update scraping status to completed
       await this.databaseService.updateScrapingStatus(user._id, 'completed');
 
-      // Process thumbnails in background (don't await to avoid blocking response)
-      this.processUserThumbnails(username).catch(error => {
-        this.logger.warn(`Background thumbnail processing failed for ${username}:`, error);
-      });
+      // Process thumbnails synchronously for first-time scraping to ensure complete data
+      try {
+        await this.processUserThumbnails(username);
+        this.logger.info(`✅ Thumbnail processing completed for new user: ${username}`);
+      } catch (thumbnailError) {
+        this.logger.warn(`⚠️ Thumbnail processing failed for ${username}, continuing with response:`, thumbnailError);
+      }
 
-      // Get fresh data from database to ensure consistency
+      // Get fresh data from database to ensure consistency (including processed thumbnails)
       const refreshedUser = await this.databaseService.findUserByUsername(username);
 
       // Prepare response data - only basic profile information
