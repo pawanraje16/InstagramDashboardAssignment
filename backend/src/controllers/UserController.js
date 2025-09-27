@@ -18,6 +18,7 @@ class UserController {
     this.getUser = this.getUser.bind(this);
     this.refreshUser = this.refreshUser.bind(this);
     this.getUserPosts = this.getUserPosts.bind(this);
+    this.getUserReels = this.getUserReels.bind(this);
     this.getUserAnalytics = this.getUserAnalytics.bind(this);
     this.searchUsers = this.searchUsers.bind(this);
     this.getTopInfluencers = this.getTopInfluencers.bind(this);
@@ -49,22 +50,35 @@ class UserController {
         const rateLimitCheck = await this.databaseService.checkRateLimit(username);
 
         if (!rateLimitCheck.canScrape) {
-          // Return cached data
+          // Return cached basic profile data only
           this.logger.info(`Returning cached data for ${username}`);
 
           const response = ApiResponse.cached(
             {
-              profile: existingUser,
-              cache_info: {
-                last_updated: existingUser.scraping.last_scraped,
-                next_refresh: rateLimitCheck.nextAllowedScrape
-              }
+              // Basic Information (mandatory)
+              username: existingUser.instagram_username,
+              full_name: existingUser.profile.full_name,
+              profile_pic_url: existingUser.profile.profile_pic_url,
+              followers: existingUser.profile.followers,
+              following: existingUser.profile.following,
+              posts_count: existingUser.profile.posts_count,
+              is_verified: existingUser.profile.is_verified,
+
+              // Engagement & Analytics (mandatory)
+              engagement_rate: existingUser.analytics.engagement_rate,
+              avg_likes: existingUser.analytics.avg_likes,
+              avg_comments: existingUser.analytics.avg_comments
             },
-            `Data cached since ${existingUser.scraping.last_scraped}`,
+            `Data cached since ${existingUser.last_scraped}`,
             `Profile data for @${username}`
           );
 
-          return response.send(res);
+          if (!res.headersSent) {
+            return response.send(res);
+          } else {
+            this.logger.warn(`Headers already sent for ${username}, skipping cached response`);
+            return;
+          }
         }
       }
 
@@ -145,11 +159,23 @@ class UserController {
         sortBy
       });
 
+      // Format posts to only include required fields
+      const formattedPosts = posts.map(post => ({
+        type: 'post',
+        shortcode: post.shortcode,
+        media_type: post.media_type,
+        caption: post.caption,
+        display_url: post.display_url,
+        likes: post.likes,
+        comments: post.comments,
+        posted_at: post.posted_at
+      }));
+
       // Get total count for pagination
       const totalPosts = user.profile.posts_count || posts.length;
 
       const response = ApiResponse.paginated(
-        posts,
+        formattedPosts,
         {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -165,6 +191,79 @@ class UserController {
 
     } catch (error) {
       this.logger.error(`Error in getUserPosts for ${req.params.username}:`, error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get user reels with pagination
+   *
+   * @route GET /api/user/:username/reels
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getUserReels(req, res, next) {
+    try {
+      const { username } = req.params;
+      const { page = 1, limit = 20, sortBy = '-posted_at' } = req.query;
+
+      if (!username) {
+        throw ApiError.badRequest('Username parameter is required');
+      }
+
+      this.logger.info(`Getting reels for user: ${username}`);
+
+      // Find user
+      const user = await this.databaseService.findUserByUsername(username);
+
+      if (!user) {
+        throw ApiError.notFound(`User @${username} not found in database`);
+      }
+
+      // Get reels with pagination
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const reels = await this.databaseService.getUserReels(user._id, {
+        limit: parseInt(limit),
+        skip,
+        sortBy
+      });
+
+      // Format reels to include all required fields
+      const formattedReels = reels.map(reel => ({
+        type: 'reel',
+        shortcode: reel.shortcode,
+        caption: reel.caption,
+        display_url: reel.display_url,
+        video_url: reel.video_url,
+        likes: reel.likes,
+        comments: reel.comments,
+        views: reel.views,
+        hashtags: reel.hashtags,
+        tags: reel.tags,
+        posted_at: reel.posted_at,
+        duration: reel.duration
+      }));
+
+      // Get total count for pagination (approximate)
+      const totalReels = formattedReels.length;
+
+      const response = ApiResponse.paginated(
+        formattedReels,
+        {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: totalReels,
+          totalPages: Math.ceil(totalReels / parseInt(limit)),
+          hasNext: formattedReels.length === parseInt(limit),
+          hasPrev: parseInt(page) > 1
+        },
+        `Reels for @${username}`
+      );
+
+      response.send(res);
+
+    } catch (error) {
+      this.logger.error(`Error in getUserReels for ${req.params.username}:`, error);
       next(error);
     }
   }
@@ -193,12 +292,12 @@ class UserController {
         throw ApiError.notFound(`User @${username} not found in database`);
       }
 
-      // Get analytics
-      const analytics = await this.databaseService.getUserAnalytics(user._id);
-
-      if (!analytics) {
-        throw ApiError.notFound(`No analytics data found for @${username}`);
-      }
+      // Return analytics from user profile (only required fields)
+      const analytics = {
+        engagement_rate: user.analytics.engagement_rate,
+        avg_likes: user.analytics.avg_likes,
+        avg_comments: user.analytics.avg_comments
+      };
 
       const response = ApiResponse.success(
         analytics,
@@ -305,8 +404,8 @@ class UserController {
       const user = await this.databaseService.upsertUser(instagramData.profile);
       userId = user._id;
 
-      // Save posts
-      const savedPosts = await this.databaseService.savePosts(user._id, instagramData.posts);
+      // Save posts and reels
+      const savedContent = await this.databaseService.savePosts(user._id, instagramData.posts);
 
       // Save analytics
       const savedAnalytics = await this.databaseService.saveAnalytics(user._id, instagramData.analytics);
@@ -314,23 +413,24 @@ class UserController {
       // Update scraping status to completed
       await this.databaseService.updateScrapingStatus(user._id, 'completed');
 
-      // Prepare response data
+      // Get fresh data from database to ensure consistency
+      const refreshedUser = await this.databaseService.findUserByUsername(username);
+
+      // Prepare response data - only basic profile information
       const responseData = {
-        profile: user,
-        posts: savedPosts,
-        analytics: savedAnalytics,
-        summary: {
-          total_posts: savedPosts.length,
-          total_likes: instagramData.analytics.total_likes,
-          total_comments: instagramData.analytics.total_comments,
-          engagement_rate: instagramData.analytics.engagement_rate,
-          influence_score: instagramData.analytics.influence_score
-        },
-        meta: {
-          scraped_at: new Date().toISOString(),
-          data_freshness: 'live',
-          next_refresh_available: new Date(Date.now() + 4 * 60 * 60 * 1000) // 4 hours
-        }
+        // Basic Information (mandatory)
+        username: refreshedUser.instagram_username,
+        full_name: refreshedUser.profile.full_name,
+        profile_pic_url: refreshedUser.profile.profile_pic_url,
+        followers: refreshedUser.profile.followers,
+        following: refreshedUser.profile.following,
+        posts_count: refreshedUser.profile.posts_count,
+        is_verified: refreshedUser.profile.is_verified,
+
+        // Engagement & Analytics (mandatory)
+        engagement_rate: refreshedUser.analytics.engagement_rate,
+        avg_likes: refreshedUser.analytics.avg_likes,
+        avg_comments: refreshedUser.analytics.avg_comments
       };
 
       const isNewUser = !existingUser;
@@ -338,14 +438,21 @@ class UserController {
         ? ApiResponse.created(responseData, `New profile created for @${username}`)
         : ApiResponse.success(responseData, `Profile refreshed for @${username}`);
 
-      response.send(res);
-
-      this.logger.info(`Successfully refreshed data for ${username}: ${savedPosts.length} posts saved`);
+      if (!res.headersSent) {
+        response.send(res);
+        this.logger.info(`Successfully refreshed data for ${username}`);
+      } else {
+        this.logger.warn(`Headers already sent for ${username}, skipping response`);
+      }
 
     } catch (error) {
       // Update scraping status to failed
       if (userId) {
-        await this.databaseService.updateScrapingStatus(userId, 'failed', error.message);
+        try {
+          await this.databaseService.updateScrapingStatus(userId, 'failed', error.message);
+        } catch (statusError) {
+          this.logger.warn(`Failed to update scraping status:`, statusError);
+        }
       }
 
       this.logger.error(`Failed to refresh data for ${username}:`, error);

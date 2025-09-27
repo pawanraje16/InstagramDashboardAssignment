@@ -196,47 +196,42 @@ class InstagramService {
    */
   transformPostData(node) {
     try {
-      return {
+      const mediaType = this.getMediaType(node);
+      const caption = node.edge_media_to_caption?.edges?.[0]?.node?.text || '';
+
+      // Base data for both posts and reels
+      const baseData = {
         instagram_post_id: node.id,
         shortcode: node.shortcode,
-        media_type: this.getMediaType(node),
-        caption: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+        caption,
         display_url: node.display_url,
-        video_url: node.video_url || null,
-        thumbnail_url: node.display_url,
-
-        // Engagement
         likes: node.edge_liked_by?.count || node.edge_media_preview_like?.count || 0,
         comments: node.edge_media_to_comment?.count || node.edge_media_preview_comment?.count || 0,
-        views: node.video_view_count || 0,
-
-        // Content analysis
-        hashtags: this.extractHashtags(node.edge_media_to_caption?.edges?.[0]?.node?.text || ''),
-        mentions: this.extractMentions(node.edge_media_to_caption?.edges?.[0]?.node?.text || ''),
-
-        // Media properties
-        dimensions: {
-          width: node.dimensions?.width || 0,
-          height: node.dimensions?.height || 0
-        },
-        duration: node.video_duration || 0,
-
-        // Location
-        location: node.location ? {
-          id: node.location.id,
-          name: node.location.name,
-          slug: node.location.slug
-        } : null,
-
-        // Instagram metadata
-        instagram_data: {
-          taken_at: new Date(node.taken_at_timestamp * 1000),
-          posted_at: new Date(node.taken_at_timestamp * 1000),
-          accessibility_caption: node.accessibility_caption || '',
-          is_paid_partnership: false,
-          tagged_users: this.extractTaggedUsers(node)
-        }
+        posted_at: new Date(node.taken_at_timestamp * 1000)
       };
+
+      if (mediaType === 'reel' || mediaType === 'video') {
+        // For reels - include additional fields
+        return {
+          ...baseData,
+          video_url: node.video_url || null,
+          views: node.video_view_count || 0,
+          hashtags: this.extractHashtags(caption),
+          mentions: this.extractMentions(caption),
+          tags: this.extractTags(caption), // Custom tags/categories
+          duration: node.video_duration || 0,
+          dimensions: {
+            width: node.dimensions?.width || 0,
+            height: node.dimensions?.height || 0
+          }
+        };
+      } else {
+        // For posts (image/carousel) - minimal data
+        return {
+          ...baseData,
+          media_type: mediaType
+        };
+      }
 
     } catch (error) {
       logger.error('Error transforming post data:', error);
@@ -431,6 +426,38 @@ class InstagramService {
   }
 
   /**
+   * Extract custom tags from caption (like categories, topics)
+   * @param {string} caption - Post caption
+   * @returns {Array} Array of custom tags
+   */
+  extractTags(caption) {
+    try {
+      // Extract custom tags - you can modify this logic based on your needs
+      // For now, extracting common categories/topics from caption
+      const tags = [];
+      const lowerCaption = caption.toLowerCase();
+
+      // Common content categories
+      const categories = [
+        'fashion', 'food', 'travel', 'fitness', 'beauty', 'lifestyle',
+        'music', 'art', 'dance', 'comedy', 'tech', 'sports', 'nature',
+        'motivation', 'education', 'business', 'diy', 'recipe', 'tutorial'
+      ];
+
+      categories.forEach(category => {
+        if (lowerCaption.includes(category)) {
+          tags.push(category);
+        }
+      });
+
+      return tags;
+    } catch (error) {
+      logger.error('Error extracting tags:', error);
+      return [];
+    }
+  }
+
+  /**
    * Extract tagged users from post node
    * @param {Object} node - Instagram post node
    * @returns {Array} Array of tagged users
@@ -457,6 +484,10 @@ class InstagramService {
    * @returns {string} Media type
    */
   getMediaType(node) {
+    // Check if it's a reel (short video content)
+    if (node.clips_metadata || node.video_duration < 60) {
+      return 'reel';
+    }
     if (node.__typename === 'GraphVideo') return 'video';
     if (node.__typename === 'GraphSidecar') return 'carousel';
     if (node.is_video) return 'video';

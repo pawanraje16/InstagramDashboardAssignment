@@ -82,26 +82,32 @@ npm run dev
 
 ## 📡 API Endpoints
 
-### **User Endpoints**
+### **User Profile Endpoints**
 ```http
-GET    /api/user/:username           # Get user profile & analytics
-POST   /api/user/:username/refresh   # Force refresh user data
-GET    /api/user/:username/posts     # Get user posts (paginated)
-GET    /api/user/:username/analytics # Get detailed analytics
+GET    /api/user/:username           # Get basic profile info (followers, engagement, etc.)
+POST   /api/user/:username/refresh   # Force refresh user data from Instagram
+GET    /api/user/:username/analytics # Get detailed analytics data
+```
+
+### **Content Endpoints**
+```http
+GET    /api/user/:username/posts     # Get user posts (images/carousels) with pagination
+GET    /api/user/:username/reels     # Get user reels with views, hashtags, tags
 ```
 
 ### **Search Endpoints**
 ```http
-GET    /api/users/search?q=query     # Search users
-GET    /api/users/top?limit=50       # Get top influencers
+GET    /api/users/search?q=query     # Search users by username/name
+GET    /api/users/top?limit=50       # Get top influencers by followers
 ```
 
 ### **Utility Endpoints**
 ```http
 GET    /health                       # Health check
 GET    /api                         # API information
-GET    /api/docs                    # API documentation
 ```
+
+> 📖 **Detailed API Documentation**: See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for complete endpoint specifications, request/response examples, and data models.
 
 ## 🛠️ Backend Technology Stack
 
@@ -131,48 +137,64 @@ GET    /api/docs                    # API documentation
   instagram_id: String,
   profile: {
     full_name: String,
-    biography: String,
+    profile_pic_url: String,
     followers: Number,
     following: Number,
     posts_count: Number,
-    is_verified: Boolean,
-    is_business: Boolean,
-    profile_pic_url: String
+    is_verified: Boolean
   },
   analytics: {
-    influence_score: Number,
     engagement_rate: Number,
     avg_likes: Number,
-    avg_comments: Number,
-    total_likes: Number,
-    total_comments: Number
+    avg_comments: Number
   },
-  scraping: {
-    last_scraped: Date,
-    scrape_count: Number,
-    scrape_status: String
-  }
+  last_scraped: Date,
+  scrape_status: String,
+  created_at: Date,
+  updated_at: Date
 }
 ```
 
-### **Posts Collection**
+### **Posts Collection** (Images & Carousels)
 ```javascript
 {
   _id: ObjectId,
   user_id: ObjectId,
   instagram_post_id: String,
   shortcode: String,
-  media_type: String,
+  media_type: "image" | "carousel",
   caption: String,
+  display_url: String,
   likes: Number,
   comments: Number,
-  views: Number,
-  hashtags: [String],
-  mentions: [Object],
-  instagram_data: {
-    posted_at: Date,
-    taken_at: Date
-  }
+  posted_at: Date,
+  created_at: Date
+}
+```
+
+### **Reels Collection** (Videos with Extended Data)
+```javascript
+{
+  _id: ObjectId,
+  user_id: ObjectId,
+  instagram_post_id: String,
+  shortcode: String,
+  caption: String,
+  display_url: String,        // Thumbnail
+  video_url: String,          // Video file
+  likes: Number,
+  comments: Number,
+  views: Number,              // Reel-specific metric
+  hashtags: [String],         // Extracted from caption
+  tags: [String],             // Content categories
+  mentions: [Object],         // @mentions
+  duration: Number,           // Video length in seconds
+  dimensions: {
+    width: Number,
+    height: Number
+  },
+  posted_at: Date,
+  created_at: Date
 }
 ```
 

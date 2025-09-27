@@ -17,47 +17,34 @@ const UserSchema = new mongoose.Schema({
     index: true
   },
 
-  // Profile Information (Core Requirements Only)
+  // Profile Information (Basic Information - Mandatory)
   profile: {
     full_name: String,
     profile_pic_url: String,
     is_verified: { type: Boolean, default: false },
-
-    // Follower Metrics (Basic Information - Mandatory)
     followers: { type: Number, default: 0 },
     following: { type: Number, default: 0 },
     posts_count: { type: Number, default: 0 }
   },
 
-  // Analytics Metrics (Core Requirements Only)
+  // Analytics Metrics (Engagement & Analytics - Mandatory)
   analytics: {
     engagement_rate: { type: Number, default: 0 },
     avg_likes: { type: Number, default: 0 },
     avg_comments: { type: Number, default: 0 }
   },
 
-  // Scraping Metadata
-  scraping: {
-    last_scraped: { type: Date, default: Date.now },
-    scrape_count: { type: Number, default: 0 },
-    next_scrape: Date,
-    scrape_status: {
-      type: String,
-      enum: ['pending', 'in_progress', 'completed', 'failed'],
-      default: 'pending'
-    },
-    last_error: String,
-
-    // Rate limiting
-    daily_scrapes: { type: Number, default: 0 },
-    last_scrape_reset: { type: Date, default: Date.now }
+  // Minimal scraping metadata
+  last_scraped: { type: Date, default: Date.now },
+  scrape_status: {
+    type: String,
+    enum: ['pending', 'in_progress', 'completed', 'failed'],
+    default: 'pending'
   },
 
-  // System Metadata
+  // System fields
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
-
-  // Soft delete
   is_active: { type: Boolean, default: true }
 }, {
   timestamps: true,
@@ -67,8 +54,7 @@ const UserSchema = new mongoose.Schema({
 // Indexes for performance
 UserSchema.index({ instagram_username: 1 });
 UserSchema.index({ 'profile.followers': -1 });
-UserSchema.index({ 'analytics.influence_score': -1 });
-UserSchema.index({ 'scraping.last_scraped': 1 });
+UserSchema.index({ last_scraped: 1 });
 UserSchema.index({ created_at: -1 });
 
 // Virtual for posts
@@ -78,46 +64,12 @@ UserSchema.virtual('posts', {
   foreignField: 'user_id'
 });
 
-// Virtual for recent analytics
-UserSchema.virtual('recent_analytics', {
-  ref: 'Analytics',
-  localField: '_id',
-  foreignField: 'user_id',
-  options: { sort: { created_at: -1 }, limit: 1 }
-});
-
 // Methods
 UserSchema.methods.updateAnalytics = function(analyticsData) {
   this.analytics = { ...this.analytics, ...analyticsData };
-  this.scraping.last_scraped = new Date();
+  this.last_scraped = new Date();
   this.updated_at = new Date();
   return this.save();
-};
-
-UserSchema.methods.incrementScrapeCount = function() {
-  this.scraping.scrape_count += 1;
-  this.scraping.daily_scrapes += 1;
-  return this.save();
-};
-
-UserSchema.methods.canScrapeAgain = function() {
-  const now = new Date();
-  const lastScrape = this.scraping.last_scraped;
-  const hoursSinceLastScrape = (now - lastScrape) / (1000 * 60 * 60);
-
-  // Allow scraping every 4 hours, max 6 times per day
-  return hoursSinceLastScrape >= 4 && this.scraping.daily_scrapes < 6;
-};
-
-UserSchema.methods.resetDailyLimit = function() {
-  const now = new Date();
-  const lastReset = this.scraping.last_scrape_reset;
-
-  if (now.getDate() !== lastReset.getDate()) {
-    this.scraping.daily_scrapes = 0;
-    this.scraping.last_scrape_reset = now;
-    return this.save();
-  }
 };
 
 // Static methods
@@ -130,9 +82,9 @@ UserSchema.statics.findByUsername = function(username) {
 
 UserSchema.statics.getTopInfluencers = function(limit = 10) {
   return this.find({ is_active: true })
-    .sort({ 'analytics.influence_score': -1 })
+    .sort({ 'profile.followers': -1 })
     .limit(limit)
-    .select('instagram_username profile.full_name profile.followers analytics.influence_score');
+    .select('instagram_username profile.full_name profile.followers profile.is_verified');
 };
 
 UserSchema.statics.searchUsers = function(query, limit = 20) {

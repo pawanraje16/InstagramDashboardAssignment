@@ -148,50 +148,193 @@ class Server {
     this.app.use('/api/user', userRoutes);
     this.app.use('/api/users', userRoutes);
 
-    // API documentation placeholder
+    // API documentation
     this.app.get('/api/docs', (req, res) => {
       res.json({
         success: true,
-        message: 'API Documentation',
+        message: 'Instagram Dashboard API Documentation',
+        version: '1.0.0',
         baseUrl: `${req.protocol}://${req.get('host')}/api`,
-        endpoints: [
-          {
-            method: 'GET',
-            path: '/user/:username',
-            description: 'Get user profile data (cached or fresh)',
-            parameters: ['username (path)']
-          },
-          {
-            method: 'POST',
-            path: '/user/:username/refresh',
-            description: 'Force refresh user data from Instagram',
-            parameters: ['username (path)']
-          },
-          {
-            method: 'GET',
-            path: '/user/:username/posts',
-            description: 'Get user posts with pagination',
-            parameters: ['username (path)', 'page (query)', 'limit (query)', 'sortBy (query)']
-          },
-          {
-            method: 'GET',
-            path: '/user/:username/analytics',
-            description: 'Get user analytics data',
-            parameters: ['username (path)']
-          },
-          {
-            method: 'GET',
-            path: '/users/search',
-            description: 'Search users by username or name',
-            parameters: ['q (query)', 'limit (query)']
-          },
-          {
-            method: 'GET',
-            path: '/users/top',
-            description: 'Get top influencers',
-            parameters: ['limit (query)']
+
+        overview: {
+          description: 'API for Instagram influencer profile analysis, posts, reels, and analytics',
+          contentSeparation: 'Posts (images/carousels) and Reels (videos) are stored and served separately',
+          rateLimits: {
+            general: '100 requests per 15 minutes',
+            refresh: '1 request per 4 hours per user'
           }
-        ]
+        },
+
+        endpoints: {
+          profile: [
+            {
+              method: 'GET',
+              path: '/user/:username',
+              description: 'Get basic user profile information only',
+              parameters: {
+                path: ['username (required) - Instagram username without @']
+              },
+              response: {
+                fields: ['username', 'full_name', 'profile_pic_url', 'followers', 'following', 'posts_count', 'is_verified', 'engagement_rate', 'avg_likes', 'avg_comments'],
+                example: '/user/theboyfrom_maharashtra'
+              }
+            },
+            {
+              method: 'POST',
+              path: '/user/:username/refresh',
+              description: 'Force refresh user data from Instagram (rate limited)',
+              parameters: {
+                path: ['username (required) - Instagram username']
+              },
+              rateLimits: '1 request per 4 hours per user',
+              response: 'Updated profile data'
+            },
+            {
+              method: 'GET',
+              path: '/user/:username/analytics',
+              description: 'Get user engagement analytics',
+              parameters: {
+                path: ['username (required) - Instagram username']
+              },
+              response: {
+                fields: ['engagement_rate', 'avg_likes', 'avg_comments']
+              }
+            }
+          ],
+
+          content: [
+            {
+              method: 'GET',
+              path: '/user/:username/posts',
+              description: 'Get user posts (images and carousels only) with pagination',
+              parameters: {
+                path: ['username (required) - Instagram username'],
+                query: [
+                  'page (optional) - Page number (default: 1)',
+                  'limit (optional) - Posts per page (default: 20, max: 50)',
+                  'sortBy (optional) - Sort field: -posted_at, posted_at, -likes, likes, -comments, comments'
+                ]
+              },
+              response: {
+                contentType: 'image/carousel posts only',
+                fields: ['type', 'shortcode', 'media_type', 'caption', 'display_url', 'likes', 'comments', 'posted_at'],
+                pagination: true,
+                example: '/user/theboyfrom_maharashtra/posts?page=1&limit=10&sortBy=-likes'
+              }
+            },
+            {
+              method: 'GET',
+              path: '/user/:username/reels',
+              description: 'Get user reels (videos) with views, hashtags, and tags',
+              parameters: {
+                path: ['username (required) - Instagram username'],
+                query: [
+                  'page (optional) - Page number (default: 1)',
+                  'limit (optional) - Reels per page (default: 20, max: 50)',
+                  'sortBy (optional) - Sort field: -posted_at, posted_at, -likes, likes, -comments, comments, -views, views'
+                ]
+              },
+              response: {
+                contentType: 'video reels with extended metadata',
+                fields: ['type', 'shortcode', 'caption', 'display_url', 'video_url', 'likes', 'comments', 'views', 'hashtags', 'tags', 'duration', 'posted_at'],
+                specialFeatures: ['view counts', 'hashtag extraction', 'content categorization', 'video duration'],
+                pagination: true,
+                example: '/user/theboyfrom_maharashtra/reels?page=1&limit=5&sortBy=-views'
+              }
+            }
+          ],
+
+          search: [
+            {
+              method: 'GET',
+              path: '/users/search',
+              description: 'Search users by username or full name',
+              parameters: {
+                query: [
+                  'q (required) - Search query (minimum 2 characters)',
+                  'limit (optional) - Number of results (default: 20, max: 100)'
+                ]
+              },
+              example: '/users/search?q=maharashtra&limit=10'
+            },
+            {
+              method: 'GET',
+              path: '/users/top',
+              description: 'Get top influencers ranked by followers',
+              parameters: {
+                query: ['limit (optional) - Number of results (default: 50, max: 100)']
+              },
+              example: '/users/top?limit=20'
+            }
+          ]
+        },
+
+        dataModels: {
+          post: {
+            description: 'Image and carousel posts',
+            fields: {
+              type: 'Always "post"',
+              shortcode: 'Instagram shortcode',
+              media_type: 'Either "image" or "carousel"',
+              caption: 'Post caption text',
+              display_url: 'Image URL',
+              likes: 'Number of likes',
+              comments: 'Number of comments',
+              posted_at: 'ISO 8601 timestamp'
+            }
+          },
+          reel: {
+            description: 'Video reels with extended metadata',
+            fields: {
+              type: 'Always "reel"',
+              shortcode: 'Instagram shortcode',
+              caption: 'Reel caption text',
+              display_url: 'Thumbnail image URL',
+              video_url: 'Video file URL',
+              likes: 'Number of likes',
+              comments: 'Number of comments',
+              views: 'Number of views (reel-specific)',
+              hashtags: 'Array of hashtags extracted from caption',
+              tags: 'Array of content category tags',
+              duration: 'Video length in seconds',
+              posted_at: 'ISO 8601 timestamp'
+            }
+          },
+          profile: {
+            description: 'User profile information',
+            fields: {
+              username: 'Instagram username',
+              full_name: 'User display name',
+              profile_pic_url: 'Profile picture URL',
+              followers: 'Follower count',
+              following: 'Following count',
+              posts_count: 'Total posts count',
+              is_verified: 'Verification status',
+              engagement_rate: 'Engagement percentage',
+              avg_likes: 'Average likes per post',
+              avg_comments: 'Average comments per post'
+            }
+          }
+        },
+
+        contentCategories: {
+          description: 'Reels are automatically tagged with content categories',
+          categories: ['fashion', 'food', 'travel', 'fitness', 'beauty', 'lifestyle', 'music', 'art', 'dance', 'comedy', 'tech', 'sports', 'nature', 'motivation', 'education', 'business', 'diy', 'recipe', 'tutorial']
+        },
+
+        errorCodes: {
+          400: 'Bad Request - Invalid parameters',
+          404: 'Not Found - User not found in database',
+          429: 'Too Many Requests - Rate limit exceeded',
+          500: 'Internal Server Error - Server error'
+        },
+
+        examples: {
+          basicProfile: `${req.protocol}://${req.get('host')}/api/user/theboyfrom_maharashtra`,
+          userPosts: `${req.protocol}://${req.get('host')}/api/user/theboyfrom_maharashtra/posts?limit=10`,
+          userReels: `${req.protocol}://${req.get('host')}/api/user/theboyfrom_maharashtra/reels?sortBy=-views`,
+          search: `${req.protocol}://${req.get('host')}/api/users/search?q=maharashtra`
+        }
       });
     });
   }

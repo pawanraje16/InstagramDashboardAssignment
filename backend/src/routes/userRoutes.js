@@ -63,7 +63,7 @@ const validatePagination = [
     .toInt(),
   query('sortBy')
     .optional()
-    .isIn(['-instagram_data.posted_at', 'instagram_data.posted_at', '-likes', 'likes', '-comments', 'comments'])
+    .isIn(['-posted_at', 'posted_at', '-likes', 'likes', '-comments', 'comments', '-views', 'views'])
     .withMessage('Invalid sort field'),
   handleValidationErrors
 ];
@@ -117,12 +117,26 @@ router.post('/:username/refresh', validateUsername, userController.refreshUser);
  * @param   username (string, required) - Instagram username
  * @query   page (number, optional) - Page number (default: 1)
  * @query   limit (number, optional) - Posts per page (default: 20, max: 50)
- * @query   sortBy (string, optional) - Sort field (default: '-instagram_data.posted_at')
+ * @query   sortBy (string, optional) - Sort field (default: '-posted_at')
  */
 router.get('/:username/posts', [
   ...validateUsername,
   ...validatePagination
 ], userController.getUserPosts);
+
+/**
+ * @route   GET /api/user/:username/reels
+ * @desc    Get user's Instagram reels with pagination
+ * @access  Public
+ * @param   username (string, required) - Instagram username
+ * @query   page (number, optional) - Page number (default: 1)
+ * @query   limit (number, optional) - Reels per page (default: 20, max: 50)
+ * @query   sortBy (string, optional) - Sort field (default: '-posted_at')
+ */
+router.get('/:username/reels', [
+  ...validateUsername,
+  ...validatePagination
+], userController.getUserReels);
 
 /**
  * @route   GET /api/user/:username/analytics

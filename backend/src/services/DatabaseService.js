@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
+const Reel = require('../models/Reel');
 const Analytics = require('../models/Analytics');
 const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
@@ -23,7 +24,6 @@ class DatabaseService {
       this.logger.info(`Finding user by username: ${username}`);
 
       const user = await User.findByUsername(username)
-        .populate('recent_analytics')
         .lean();
 
       if (user) {
@@ -52,16 +52,15 @@ class DatabaseService {
 
       const updateData = {
         ...profileData,
-        'scraping.last_scraped': new Date(),
-        'scraping.scrape_status': 'completed',
+        last_scraped: new Date(),
+        scrape_status: 'completed',
         updated_at: new Date()
       };
 
       const user = await User.findOneAndUpdate(
         { instagram_username: instagram_username.toLowerCase() },
         {
-          $set: updateData,
-          $inc: { 'scraping.scrape_count': 1 }
+          $set: updateData
         },
         {
           new: true,
@@ -89,50 +88,67 @@ class DatabaseService {
   }
 
   /**
-   * Save posts for a user
+   * Save posts and reels for a user
    * @param {string} userId - User ObjectId
-   * @param {Array} postsData - Array of post data
-   * @returns {Array} Saved posts
+   * @param {Array} postsData - Array of post data (includes both posts and reels)
+   * @returns {Object} Saved posts and reels
    */
   async savePosts(userId, postsData) {
     try {
-      this.logger.info(`Saving ${postsData.length} posts for user: ${userId}`);
+      this.logger.info(`Saving ${postsData.length} posts/reels for user: ${userId}`);
 
       const savedPosts = [];
+      const savedReels = [];
 
       for (const postData of postsData) {
         try {
-          const postWithUserId = {
+          const itemWithUserId = {
             ...postData,
-            user_id: userId,
-            scraped_at: new Date()
+            user_id: userId
           };
 
-          const post = await Post.findOneAndUpdate(
-            { instagram_post_id: postData.instagram_post_id },
-            { $set: postWithUserId },
-            {
-              new: true,
-              upsert: true,
-              runValidators: true
-            }
-          );
+          // Check if it's a reel or post based on presence of views/hashtags/tags
+          const isReel = postData.views !== undefined || postData.hashtags || postData.tags;
 
-          savedPosts.push(post);
+          if (isReel) {
+            // Save as reel
+            const reel = await Reel.findOneAndUpdate(
+              { instagram_post_id: postData.instagram_post_id },
+              { $set: itemWithUserId },
+              {
+                new: true,
+                upsert: true,
+                runValidators: true
+              }
+            );
+            savedReels.push(reel);
+          } else {
+            // Save as post
+            const post = await Post.findOneAndUpdate(
+              { instagram_post_id: postData.instagram_post_id },
+              { $set: itemWithUserId },
+              {
+                new: true,
+                upsert: true,
+                runValidators: true
+              }
+            );
+            savedPosts.push(post);
+          }
 
-        } catch (postError) {
-          this.logger.warn(`Error saving individual post ${postData.instagram_post_id}:`, postError);
-          // Continue with other posts even if one fails
+        } catch (itemError) {
+          this.logger.warn(`Error saving individual item ${postData.instagram_post_id}:`, itemError);
+          // Continue with other items even if one fails
           continue;
         }
       }
 
-      this.logger.info(`Successfully saved ${savedPosts.length}/${postsData.length} posts`);
-      return savedPosts;
+      this.logger.info(`Successfully saved ${savedPosts.length} posts and ${savedReels.length} reels`);
+      return { posts: savedPosts, reels: savedReels };
 
     } catch (error) {
-      this.logger.error('Error saving posts:', error);
-      throw new ApiError(500, 'Database error while saving posts');
+      this.logger.error('Error saving posts/reels:', error);
+      throw new ApiError(500, 'Database error while saving posts/reels');
     }
   }
 
@@ -258,6 +274,28 @@ class DatabaseService {
   }
 
   /**
+   * Get user's reels
+   * @param {string} userId - User ObjectId
+   * @param {Object} options - Query options (limit, skip, sortBy)
+   * @returns {Array} User's reels
+   */
+  async getUserReels(userId, options = {}) {
+    try {
+      const { limit = 20, skip = 0, sortBy = 'posted_at' } = options;
+      this.logger.info(`Getting reels for user: ${userId} (limit: ${limit}, skip: ${skip})`);
+
+      const reels = await Reel.findByUser(userId, limit, skip);
+
+      this.logger.info(`Found ${reels.length} reels for user: ${userId}`);
+      return reels;
+
+    } catch (error) {
+      this.logger.error(`Error getting reels for user ${userId}:`, error);
+      throw new ApiError(500, 'Database error while retrieving reels');
+    }
+  }
+
+  /**
    * Get user's analytics
    * @param {string} userId - User ObjectId
    * @returns {Object} Latest analytics
@@ -341,18 +379,16 @@ class DatabaseService {
         };
       }
 
-      // Reset daily limit if needed
-      await user.resetDailyLimit();
-
-      const canScrape = user.canScrapeAgain();
+      const now = new Date();
+      const lastScrape = user.last_scraped;
+      const hoursSinceLastScrape = (now - lastScrape) / (1000 * 60 * 60);
+      const canScrape = hoursSinceLastScrape >= 4;
 
       return {
         canScrape,
         reason: canScrape ? 'allowed' : 'rate_limited',
-        lastScraped: user.scraping.last_scraped,
-        scrapeCount: user.scraping.scrape_count,
-        dailyScrapes: user.scraping.daily_scrapes,
-        nextAllowedScrape: canScrape ? null : new Date(user.scraping.last_scraped.getTime() + 4 * 60 * 60 * 1000)
+        lastScraped: user.last_scraped,
+        nextAllowedScrape: canScrape ? null : new Date(user.last_scraped.getTime() + 4 * 60 * 60 * 1000)
       };
 
     } catch (error) {
@@ -400,13 +436,9 @@ class DatabaseService {
   async updateScrapingStatus(userId, status, error = null) {
     try {
       const updateData = {
-        'scraping.scrape_status': status,
-        'scraping.last_scraped': new Date()
+        scrape_status: status,
+        last_scraped: new Date()
       };
-
-      if (error) {
-        updateData['scraping.last_error'] = error;
-      }
 
       await User.findByIdAndUpdate(userId, { $set: updateData });
 
