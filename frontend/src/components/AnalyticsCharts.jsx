@@ -25,7 +25,18 @@ ChartJS.register(
   ArcElement
 );
 
-const AnalyticsCharts = ({ analytics }) => {
+const AnalyticsCharts = ({ profile, posts, reels }) => {
+  // Process real data to create analytics
+  const formatNumber = (num) => {
+    if (!num && num !== 0) return 0;
+    return num;
+  };
+
+  // Get recent 10 posts/reels for charts
+  const recentContent = [...(posts || []), ...(reels || [])]
+    .sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at))
+    .slice(0, 10);
+
   const chartOptions = {
     responsive: true,
     plugins: {
@@ -58,25 +69,25 @@ const AnalyticsCharts = ({ analytics }) => {
   };
 
   const likesVsCommentsData = {
-    labels: analytics.likesVsComments.labels,
+    labels: recentContent.map((item, idx) => `Content ${idx + 1}`),
     datasets: [
       {
         label: 'Likes',
-        data: analytics.likesVsComments.likes,
+        data: recentContent.map(item => formatNumber(item.likes)),
         backgroundColor: 'rgba(168, 85, 247, 0.8)',
         borderColor: 'rgba(168, 85, 247, 1)',
         borderWidth: 2,
       },
       {
         label: 'Comments',
-        data: analytics.likesVsComments.comments,
+        data: recentContent.map(item => formatNumber(item.comments)),
         backgroundColor: 'rgba(59, 130, 246, 0.8)',
         borderColor: 'rgba(59, 130, 246, 1)',
         borderWidth: 2,
       },
       {
         label: 'Views',
-        data: analytics.likesVsComments.views,
+        data: recentContent.map(item => formatNumber(item.views) || 0),
         backgroundColor: 'rgba(16, 185, 129, 0.8)',
         borderColor: 'rgba(16, 185, 129, 1)',
         borderWidth: 2,
@@ -85,11 +96,14 @@ const AnalyticsCharts = ({ analytics }) => {
   };
 
   const engagementTrendData = {
-    labels: analytics.engagementTrend.labels,
+    labels: recentContent.map((item, idx) => `Content ${idx + 1}`),
     datasets: [
       {
         label: 'Engagement Rate (%)',
-        data: analytics.engagementTrend.engagement,
+        data: recentContent.map(item => {
+          const engagement = ((formatNumber(item.likes) + formatNumber(item.comments)) / Math.max(formatNumber(item.views) || formatNumber(item.likes), 1)) * 100;
+          return parseFloat(engagement.toFixed(2));
+        }),
         borderColor: 'rgba(249, 115, 22, 1)',
         backgroundColor: 'rgba(249, 115, 22, 0.2)',
         fill: true,
@@ -103,19 +117,17 @@ const AnalyticsCharts = ({ analytics }) => {
   };
 
   const postPerformanceData = {
-    labels: analytics.postPerformance.labels,
+    labels: ['Posts', 'Reels'],
     datasets: [
       {
-        data: analytics.postPerformance.data,
+        data: [posts?.length || 0, reels?.length || 0],
         backgroundColor: [
           'rgba(168, 85, 247, 0.8)',
           'rgba(59, 130, 246, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
         ],
         borderColor: [
           'rgba(168, 85, 247, 1)',
           'rgba(59, 130, 246, 1)',
-          'rgba(16, 185, 129, 1)',
         ],
         borderWidth: 2,
       },
@@ -194,20 +206,20 @@ const AnalyticsCharts = ({ analytics }) => {
           <h3 className="text-xl font-semibold text-white mb-4">Quick Stats</h3>
           <div className="space-y-4">
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-400 mb-2">4.8%</div>
+              <div className="text-3xl font-bold text-purple-400 mb-2">{formatNumber(profile?.engagement_rate || 0)}%</div>
               <div className="text-gray-400 text-sm">Engagement Rate</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400 mb-2">2.3K</div>
+              <div className="text-3xl font-bold text-blue-400 mb-2">{formatNumber(profile?.avg_likes || 0)}</div>
               <div className="text-gray-400 text-sm">Avg Likes</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-400 mb-2">89</div>
+              <div className="text-3xl font-bold text-green-400 mb-2">{formatNumber(profile?.avg_comments || 0)}</div>
               <div className="text-gray-400 text-sm">Avg Comments</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-yellow-400 mb-2">15.2K</div>
-              <div className="text-gray-400 text-sm">Avg Views</div>
+              <div className="text-3xl font-bold text-yellow-400 mb-2">{reels?.reduce((sum, reel) => sum + (reel.views || 0), 0) || 0}</div>
+              <div className="text-gray-400 text-sm">Total Views</div>
             </div>
           </div>
         </Card>

@@ -1,12 +1,31 @@
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { useSelector, useDispatch } from 'react-redux';
 import SearchBar from './SearchBar';
 import ProfileHeader from './ProfileHeader';
 import AnalyticsCharts from './AnalyticsCharts';
 import PostsGrid from './PostsGrid';
-import AudienceAnalytics from './AudienceAnalytics';
+import ReelsGrid from './ReelsGrid';
 import Button from './ui/Button';
+import { refreshUserData } from '../store/slices/userSlice';
 
-const DashboardPage = ({ userData, onBackToHome, onNewSearch }) => {
+const DashboardPage = ({ onBackToHome, onNewSearch }) => {
+  const dispatch = useDispatch();
+  const { profile, posts, reels, loading, currentUser } = useSelector((state) => state.user);
+
+  // Debug logging
+  console.log('🔍 DashboardPage Debug:', {
+    reduxState: { profile: profile?.username, posts, reels, loading, currentUser },
+    postsLength: posts?.length,
+    reelsLength: reels?.length,
+    profileExists: !!profile
+  });
+
+  const handleRefresh = () => {
+    if (currentUser) {
+      dispatch(refreshUserData(currentUser));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="sticky top-0 bg-black/80 backdrop-blur-md border-b border-gray-800 z-50">
@@ -21,8 +40,21 @@ const DashboardPage = ({ userData, onBackToHome, onNewSearch }) => {
               <ArrowLeftIcon className="h-4 w-4" />
               <span>Back to Home</span>
             </Button>
-            <div className="text-sm text-gray-400">
-              Analyzing: <span className="text-purple-400 font-medium">@{userData.profile.username}</span>
+
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-400">
+                Analyzing: <span className="text-purple-400 font-medium">@{profile.username}</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={loading}
+                className="flex items-center space-x-2"
+              >
+                <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </Button>
             </div>
           </div>
           <SearchBar onSearch={onNewSearch} placeholder="Search another user..." />
@@ -30,10 +62,30 @@ const DashboardPage = ({ userData, onBackToHome, onNewSearch }) => {
       </div>
 
       <div className="container mx-auto px-4 py-8 space-y-12">
-        <ProfileHeader profile={userData.profile} />
-        <AnalyticsCharts analytics={userData.analytics} />
-        <PostsGrid posts={userData.recentPosts} />
-        <AudienceAnalytics audienceData={userData.audienceData} />
+        {/* Profile Section */}
+        <ProfileHeader profile={profile || {}} />
+
+        {/* Analytics Section */}
+        <AnalyticsCharts profile={profile || {}} posts={posts || []} reels={reels || []} />
+
+        {/* Content Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Posts Section */}
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-6">
+              Recent Posts ({posts?.length || 0})
+            </h2>
+            <PostsGrid posts={posts || []} />
+          </div>
+
+          {/* Reels Section */}
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-6">
+              Recent Reels ({reels?.length || 0})
+            </h2>
+            <ReelsGrid reels={reels || []} />
+          </div>
+        </div>
       </div>
 
       <footer className="bg-gray-900/50 border-t border-gray-800 py-8 mt-16">

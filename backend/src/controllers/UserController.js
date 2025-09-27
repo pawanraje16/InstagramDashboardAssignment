@@ -1,5 +1,6 @@
 const InstagramService = require('../services/InstagramService');
 const DatabaseService = require('../services/DatabaseService');
+const imageService = require('../services/imageService');
 const ApiResponse = require('../utils/ApiResponse');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
@@ -22,6 +23,8 @@ class UserController {
     this.getUserAnalytics = this.getUserAnalytics.bind(this);
     this.searchUsers = this.searchUsers.bind(this);
     this.getTopInfluencers = this.getTopInfluencers.bind(this);
+    this.processUserThumbnails = this.processUserThumbnails.bind(this);
+    this.processThumbnails = this.processThumbnails.bind(this);
   }
 
   /**
@@ -58,7 +61,9 @@ class UserController {
               // Basic Information (mandatory)
               username: existingUser.instagram_username,
               full_name: existingUser.profile.full_name,
+              bio: existingUser.profile.bio,
               profile_pic_url: existingUser.profile.profile_pic_url,
+              profile_pic_cloudinary: existingUser.profile.profile_pic_cloudinary,
               followers: existingUser.profile.followers,
               following: existingUser.profile.following,
               posts_count: existingUser.profile.posts_count,
@@ -145,10 +150,38 @@ class UserController {
       this.logger.info(`Getting posts for user: ${username}`);
 
       // Find user
-      const user = await this.databaseService.findUserByUsername(username);
+      let user = await this.databaseService.findUserByUsername(username);
 
       if (!user) {
-        throw ApiError.notFound(`User @${username} not found in database`);
+        // User doesn't exist, trigger scraping first
+        this.logger.info(`User ${username} not found, triggering scraping...`);
+
+        try {
+          // Fetch complete data from Instagram
+          const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+
+          // Save user profile
+          user = await this.databaseService.upsertUser(instagramData.profile);
+
+          // Save posts and reels
+          await this.databaseService.savePosts(user._id, instagramData.posts);
+
+          // Save analytics
+          await this.databaseService.saveAnalytics(user._id, instagramData.analytics);
+
+          // Update scraping status to completed
+          await this.databaseService.updateScrapingStatus(user._id, 'completed');
+
+          // Process thumbnails in background (don't await to avoid blocking response)
+          this.processUserThumbnails(username).catch(error => {
+            this.logger.warn(`Background thumbnail processing failed for ${username}:`, error);
+          });
+
+          this.logger.info(`Successfully scraped and saved data for ${username}`);
+        } catch (scrapingError) {
+          this.logger.error(`Failed to scrape data for ${username}:`, scrapingError);
+          throw ApiError.notFound(`User @${username} not found on Instagram`);
+        }
       }
 
       // Get posts with pagination
@@ -166,6 +199,7 @@ class UserController {
         media_type: post.media_type,
         caption: post.caption,
         display_url: post.display_url,
+        display_url_cloudinary: post.display_url_cloudinary,
         likes: post.likes,
         comments: post.comments,
         posted_at: post.posted_at
@@ -214,10 +248,38 @@ class UserController {
       this.logger.info(`Getting reels for user: ${username}`);
 
       // Find user
-      const user = await this.databaseService.findUserByUsername(username);
+      let user = await this.databaseService.findUserByUsername(username);
 
       if (!user) {
-        throw ApiError.notFound(`User @${username} not found in database`);
+        // User doesn't exist, trigger scraping first
+        this.logger.info(`User ${username} not found, triggering scraping...`);
+
+        try {
+          // Fetch complete data from Instagram
+          const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+
+          // Save user profile
+          user = await this.databaseService.upsertUser(instagramData.profile);
+
+          // Save posts and reels
+          await this.databaseService.savePosts(user._id, instagramData.posts);
+
+          // Save analytics
+          await this.databaseService.saveAnalytics(user._id, instagramData.analytics);
+
+          // Update scraping status to completed
+          await this.databaseService.updateScrapingStatus(user._id, 'completed');
+
+          // Process thumbnails in background (don't await to avoid blocking response)
+          this.processUserThumbnails(username).catch(error => {
+            this.logger.warn(`Background thumbnail processing failed for ${username}:`, error);
+          });
+
+          this.logger.info(`Successfully scraped and saved data for ${username}`);
+        } catch (scrapingError) {
+          this.logger.error(`Failed to scrape data for ${username}:`, scrapingError);
+          throw ApiError.notFound(`User @${username} not found on Instagram`);
+        }
       }
 
       // Get reels with pagination
@@ -234,6 +296,7 @@ class UserController {
         shortcode: reel.shortcode,
         caption: reel.caption,
         display_url: reel.display_url,
+        display_url_cloudinary: reel.display_url_cloudinary,
         video_url: reel.video_url,
         likes: reel.likes,
         comments: reel.comments,
@@ -413,6 +476,11 @@ class UserController {
       // Update scraping status to completed
       await this.databaseService.updateScrapingStatus(user._id, 'completed');
 
+      // Process thumbnails in background (don't await to avoid blocking response)
+      this.processUserThumbnails(username).catch(error => {
+        this.logger.warn(`Background thumbnail processing failed for ${username}:`, error);
+      });
+
       // Get fresh data from database to ensure consistency
       const refreshedUser = await this.databaseService.findUserByUsername(username);
 
@@ -421,7 +489,9 @@ class UserController {
         // Basic Information (mandatory)
         username: refreshedUser.instagram_username,
         full_name: refreshedUser.profile.full_name,
+        bio: refreshedUser.profile.bio,
         profile_pic_url: refreshedUser.profile.profile_pic_url,
+        profile_pic_cloudinary: refreshedUser.profile.profile_pic_cloudinary,
         followers: refreshedUser.profile.followers,
         following: refreshedUser.profile.following,
         posts_count: refreshedUser.profile.posts_count,
@@ -457,6 +527,142 @@ class UserController {
 
       this.logger.error(`Failed to refresh data for ${username}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Process thumbnails for a user (profile picture, posts, reels)
+   * Downloads and uploads to Cloudinary
+   */
+  async processUserThumbnails(username) {
+    try {
+      this.logger.info(`🖼️ Processing thumbnails for user: ${username}`);
+
+      // Get user data
+      const user = await this.databaseService.findUserByUsername(username);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const thumbnailsToProcess = [];
+
+      // Process profile picture thumbnail
+      if (user.profile.profile_pic_url && !user.profile.profile_pic_cloudinary) {
+        thumbnailsToProcess.push({
+          url: user.profile.profile_pic_url,
+          folder: 'thumbnails/profiles',
+          publicId: imageService.generatePublicId(user.profile.profile_pic_url, `profile_${user.instagram_username}`)
+        });
+      }
+
+      // Get posts and reels to process
+      const posts = await this.databaseService.getUserPosts(user._id, { limit: 20 });
+      const reels = await this.databaseService.getUserReels(user._id, { limit: 20 });
+
+      // Process post thumbnails
+      for (const post of posts) {
+        if (post.display_url && !post.display_url_cloudinary) {
+          thumbnailsToProcess.push({
+            url: post.display_url,
+            folder: 'thumbnails/posts',
+            publicId: imageService.generatePublicId(post.display_url, `post_${post.shortcode}`),
+            postId: post._id
+          });
+        }
+      }
+
+      // Process reel thumbnails
+      for (const reel of reels) {
+        if (reel.display_url && !reel.display_url_cloudinary) {
+          thumbnailsToProcess.push({
+            url: reel.display_url,
+            folder: 'thumbnails/reels',
+            publicId: imageService.generatePublicId(reel.display_url, `reel_${reel.shortcode}`),
+            reelId: reel._id
+          });
+        }
+      }
+
+      this.logger.info(`📸 Found ${thumbnailsToProcess.length} thumbnails to process for ${username}`);
+
+      if (thumbnailsToProcess.length === 0) {
+        return { processed: 0, message: 'No thumbnails to process' };
+      }
+
+      // Process thumbnails in batches
+      const results = await imageService.batchProcessThumbnails(thumbnailsToProcess);
+      let processedCount = 0;
+
+      // Update database with Cloudinary URLs
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const thumbnailData = thumbnailsToProcess[i];
+
+        if (result.cloudinary) {
+          processedCount++;
+
+          try {
+            if (thumbnailData.publicId.startsWith('profile_')) {
+              // Update user profile picture
+              await this.databaseService.updateUser(user._id, {
+                'profile.profile_pic_cloudinary': result.cloudinary
+              });
+              this.logger.info(`✅ Updated profile picture for ${username}`);
+
+            } else if (thumbnailData.postId) {
+              // Update post thumbnail
+              await this.databaseService.updatePost(thumbnailData.postId, {
+                display_url_cloudinary: result.cloudinary
+              });
+              this.logger.info(`✅ Updated post thumbnail: ${thumbnailData.publicId}`);
+
+            } else if (thumbnailData.reelId) {
+              // Update reel thumbnail
+              await this.databaseService.updateReel(thumbnailData.reelId, {
+                display_url_cloudinary: result.cloudinary
+              });
+              this.logger.info(`✅ Updated reel thumbnail: ${thumbnailData.publicId}`);
+            }
+          } catch (updateError) {
+            this.logger.error(`❌ Failed to update database for ${thumbnailData.publicId}:`, updateError);
+          }
+        }
+      }
+
+      this.logger.info(`🎉 Thumbnail processing completed for ${username}: ${processedCount}/${thumbnailsToProcess.length} thumbnails processed`);
+
+      return {
+        processed: processedCount,
+        total: thumbnailsToProcess.length,
+        message: `Successfully processed ${processedCount} thumbnails`
+      };
+
+    } catch (error) {
+      this.logger.error(`❌ Error processing thumbnails for ${username}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * API endpoint to manually trigger thumbnail processing
+   */
+  async processThumbnails(req, res, next) {
+    try {
+      const { username } = req.params;
+
+      if (!username) {
+        throw new ApiError(400, 'Username is required');
+      }
+
+      this.logger.info(`🖼️ Manual thumbnail processing triggered for: ${username}`);
+
+      // Process thumbnails in background
+      const result = await this.processUserThumbnails(username);
+
+      return res.json(new ApiResponse(200, result, 'Thumbnail processing completed'));
+
+    } catch (error) {
+      next(error);
     }
   }
 }

@@ -1,47 +1,32 @@
 import { useState } from 'react'
-import axios from 'axios'
+import { useSelector, useDispatch } from 'react-redux'
 import LandingPage from './components/LandingPage'
 import DashboardPage from './components/DashboardPage'
-import { demoUserData } from './data/demoData'
+import { fetchUserDashboard, clearUserData } from './store/slices/userSlice'
 
 function App() {
   const [currentView, setCurrentView] = useState('landing')
-  const [userData, setUserData] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const dispatch = useDispatch()
+  const { loading, error, currentUser } = useSelector((state) => state.user)
 
   const handleUserSearch = async (username) => {
-    setIsLoading(true)
-
     try {
-      if (username === 'demo') {
-        setUserData(demoUserData)
-        setCurrentView('dashboard')
-        return
-      }
-
-      const response = await axios.get(`http://localhost:8000/api/user/${username}`)
-      console.log('Response data:', response.data)
-
-      if (response.data) {
-        setUserData(response.data)
-        setCurrentView('dashboard')
-      }
+      console.log('🔍 App: Starting search for:', username);
+      const result = await dispatch(fetchUserDashboard(username)).unwrap();
+      console.log('🔍 App: Search completed, result:', result);
+      setCurrentView('dashboard');
     } catch (error) {
-      console.error('Error fetching data:', error)
-
-      setUserData(demoUserData)
-      setCurrentView('dashboard')
-    } finally {
-      setIsLoading(false)
+      console.error('❌ App: Error fetching user data:', error);
+      // You can show error message here or stay on landing page
     }
   }
 
   const handleBackToHome = () => {
     setCurrentView('landing')
-    setUserData(null)
+    dispatch(clearUserData())
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
@@ -56,10 +41,12 @@ function App() {
   return (
     <div className="App">
       {currentView === 'landing' ? (
-        <LandingPage onUserSearch={handleUserSearch} />
+        <LandingPage
+          onUserSearch={handleUserSearch}
+          error={error}
+        />
       ) : (
         <DashboardPage
-          userData={userData}
           onBackToHome={handleBackToHome}
           onNewSearch={handleUserSearch}
         />

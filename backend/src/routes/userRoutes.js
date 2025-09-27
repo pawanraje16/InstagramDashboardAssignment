@@ -146,4 +146,12 @@ router.get('/:username/reels', [
  */
 router.get('/:username/analytics', validateUsername, userController.getUserAnalytics);
 
+/**
+ * @route   POST /api/user/:username/process-thumbnails
+ * @desc    Process and upload user thumbnails to Cloudinary
+ * @access  Public
+ * @param   username (string, required) - Instagram username
+ */
+router.post('/:username/process-thumbnails', validateUsername, userController.processThumbnails);
+
 module.exports = router;

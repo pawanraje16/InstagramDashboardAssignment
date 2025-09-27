@@ -144,6 +144,43 @@ class Server {
       });
     });
 
+    // Image proxy endpoint to bypass CORS restrictions
+    this.app.get('/api/proxy/image', async (req, res) => {
+      try {
+        const { url } = req.query;
+        if (!url) {
+          return res.status(400).json({ error: 'URL parameter is required' });
+        }
+
+        // Validate URL is from Instagram
+        if (!url.includes('instagram.') && !url.includes('fbcdn.net')) {
+          return res.status(403).json({ error: 'Only Instagram URLs are allowed' });
+        }
+
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+
+        if (!response.ok) {
+          return res.status(404).json({ error: 'Image not found' });
+        }
+
+        // Set appropriate headers
+        res.set({
+          'Content-Type': response.headers.get('content-type') || 'image/jpeg',
+          'Cache-Control': 'public, max-age=3600',
+          'Access-Control-Allow-Origin': '*'
+        });
+
+        response.body.pipe(res);
+      } catch (error) {
+        logger.error('Image proxy error:', error);
+        res.status(500).json({ error: 'Failed to proxy image' });
+      }
+    });
+
     // Mount routes
     this.app.use('/api/user', userRoutes);
     this.app.use('/api/users', userRoutes);

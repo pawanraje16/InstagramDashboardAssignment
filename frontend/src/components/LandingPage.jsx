@@ -1,19 +1,10 @@
-import { useState } from 'react';
 import { ChartBarIcon, UserGroupIcon, PhotoIcon, PlayIcon } from '@heroicons/react/24/outline';
 import SearchBar from './SearchBar';
 import Card from './ui/Card';
-import { demoUserData } from '../data/demoData';
 
-const LandingPage = ({ onUserSearch }) => {
-  const [showDemo, setShowDemo] = useState(false);
-
+const LandingPage = ({ onUserSearch, error }) => {
   const handleSearch = async (username) => {
     onUserSearch(username);
-  };
-
-  const handleDemoClick = () => {
-    setShowDemo(true);
-    onUserSearch('demo');
   };
 
   const features = [
@@ -63,13 +54,18 @@ const LandingPage = ({ onUserSearch }) => {
 
               <SearchBar onSearch={handleSearch} />
 
+              {error && (
+                <div className="mt-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+                  <p className="text-red-400 text-sm">
+                    {error}
+                  </p>
+                </div>
+              )}
+
               <div className="mt-8">
-                <button
-                  onClick={handleDemoClick}
-                  className="text-purple-400 hover:text-purple-300 underline transition-colors"
-                >
-                  View Demo Dashboard
-                </button>
+                <p className="text-gray-400 text-sm">
+                  Try searching for: <span className="text-purple-400">cristiano</span>, <span className="text-purple-400">selenagomez</span>, or <span className="text-purple-400">therock</span>
+                </p>
               </div>
             </div>
 

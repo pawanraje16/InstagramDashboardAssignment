@@ -449,6 +449,93 @@ class DatabaseService {
       // Don't throw error here to avoid cascading failures
     }
   }
+
+  /**
+   * Update user document
+   * @param {string} userId - User ObjectId
+   * @param {Object} updateData - Data to update
+   * @returns {Object} Updated user
+   */
+  async updateUser(userId, updateData) {
+    try {
+      this.logger.info(`Updating user: ${userId}`);
+
+      const user = await User.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!user) {
+        throw new ApiError(404, 'User not found');
+      }
+
+      this.logger.info(`User updated successfully: ${userId}`);
+      return user;
+
+    } catch (error) {
+      this.logger.error(`Error updating user ${userId}:`, error);
+      throw new ApiError(500, 'Database error while updating user');
+    }
+  }
+
+  /**
+   * Update post document
+   * @param {string} postId - Post ObjectId
+   * @param {Object} updateData - Data to update
+   * @returns {Object} Updated post
+   */
+  async updatePost(postId, updateData) {
+    try {
+      this.logger.info(`Updating post: ${postId}`);
+
+      const post = await Post.findByIdAndUpdate(
+        postId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!post) {
+        throw new ApiError(404, 'Post not found');
+      }
+
+      this.logger.info(`Post updated successfully: ${postId}`);
+      return post;
+
+    } catch (error) {
+      this.logger.error(`Error updating post ${postId}:`, error);
+      throw new ApiError(500, 'Database error while updating post');
+    }
+  }
+
+  /**
+   * Update reel document
+   * @param {string} reelId - Reel ObjectId
+   * @param {Object} updateData - Data to update
+   * @returns {Object} Updated reel
+   */
+  async updateReel(reelId, updateData) {
+    try {
+      this.logger.info(`Updating reel: ${reelId}`);
+
+      const reel = await Reel.findByIdAndUpdate(
+        reelId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!reel) {
+        throw new ApiError(404, 'Reel not found');
+      }
+
+      this.logger.info(`Reel updated successfully: ${reelId}`);
+      return reel;
+
+    } catch (error) {
+      this.logger.error(`Error updating reel ${reelId}:`, error);
+      throw new ApiError(500, 'Database error while updating reel');
+    }
+  }
 }
 
 module.exports = DatabaseService;

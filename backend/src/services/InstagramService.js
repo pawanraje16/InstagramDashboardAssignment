@@ -147,7 +147,7 @@ class InstagramService {
         instagram_username: user.username,
         profile: {
           full_name: user.full_name || '',
-          biography: user.biography || '',
+          bio: user.biography || '',
           profile_pic_url: user.profile_pic_url_hd || user.profile_pic_url || '',
           external_url: user.external_url || '',
           is_verified: user.is_verified || false,

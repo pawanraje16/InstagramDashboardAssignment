@@ -35,6 +35,7 @@ const PostSchema = new mongoose.Schema({
     default: ''
   },
   display_url: String, // Post image/thumbnail
+  display_url_cloudinary: String, // Cloudinary URL for post image
 
   // Engagement Metrics (Post-Level Data - Important)
   likes: {
@@ -80,7 +81,7 @@ PostSchema.statics.findByUser = function(userId, limit = 20, skip = 0) {
     .sort({ posted_at: -1 })
     .limit(limit)
     .skip(skip)
-    .select('shortcode media_type caption display_url likes comments posted_at');
+    .select('shortcode media_type caption display_url display_url_cloudinary likes comments posted_at');
 };
 
 PostSchema.statics.getEngagementStats = function(userId) {

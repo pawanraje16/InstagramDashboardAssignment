@@ -20,7 +20,9 @@ const UserSchema = new mongoose.Schema({
   // Profile Information (Basic Information - Mandatory)
   profile: {
     full_name: String,
+    bio: String, // Instagram biography/description
     profile_pic_url: String,
+    profile_pic_cloudinary: String, // Cloudinary URL for profile picture
     is_verified: { type: Boolean, default: false },
     followers: { type: Number, default: 0 },
     following: { type: Number, default: 0 },

@@ -29,6 +29,7 @@ const ReelSchema = new mongoose.Schema({
     default: ''
   },
   display_url: String, // Reel thumbnail
+  display_url_cloudinary: String, // Cloudinary URL for reel thumbnail
   video_url: String, // Reel video URL
 
   // Engagement Metrics (Post-Level Data - Important)
@@ -106,7 +107,7 @@ ReelSchema.statics.findByUser = function(userId, limit = 20, skip = 0) {
     .sort({ posted_at: -1 })
     .limit(limit)
     .skip(skip)
-    .select('shortcode caption display_url video_url likes comments views hashtags tags posted_at duration');
+    .select('shortcode caption display_url display_url_cloudinary video_url likes comments views hashtags tags posted_at duration');
 };
 
 ReelSchema.statics.getEngagementStats = function(userId) {
