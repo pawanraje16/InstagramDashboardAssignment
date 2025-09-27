@@ -6,9 +6,9 @@ const Card = ({
   padding = 'md',
   ...props
 }) => {
-  const baseClasses = "bg-gray-900 border border-gray-800 rounded-2xl transition-all duration-200";
-  const hoverClasses = hover ? "hover:border-gray-700 hover:shadow-xl hover:shadow-purple-500/10" : "";
-  const gradientClasses = gradient ? "bg-gradient-to-br from-gray-900 via-gray-900 to-purple-900/20" : "";
+  const baseClasses = "bg-gray-950 border border-gray-900 rounded-2xl transition-all duration-200";
+  const hoverClasses = hover ? "hover:border-gray-800 hover:shadow-xl hover:shadow-white/5" : "";
+  const gradientClasses = gradient ? "bg-gradient-to-br from-gray-950 via-black to-gray-900/50" : "";
 
   const paddingClasses = {
     sm: "p-4",

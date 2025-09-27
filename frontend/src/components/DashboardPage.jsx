@@ -28,9 +28,9 @@ const DashboardPage = ({ onBackToHome, onNewSearch }) => {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="sticky top-0 bg-black/80 backdrop-blur-md border-b border-gray-800 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between mb-4">
+      <div className="sticky top-0 bg-black/90 backdrop-blur-md border-b border-gray-900 z-50 h-24 sm:h-28">
+        <div className="container mx-auto px-4 h-full flex flex-col justify-center">
+          <div className="flex items-center justify-between mb-3">
             <Button
               variant="ghost"
               size="sm"
@@ -61,7 +61,7 @@ const DashboardPage = ({ onBackToHome, onNewSearch }) => {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 space-y-12">
+      <div className="container mx-auto px-4 py-6 sm:py-8 space-y-8 sm:space-y-12">
         {/* Profile Section */}
         <ProfileHeader profile={profile || {}} />
 
@@ -69,7 +69,7 @@ const DashboardPage = ({ onBackToHome, onNewSearch }) => {
         <AnalyticsCharts profile={profile || {}} posts={posts || []} reels={reels || []} />
 
         {/* Content Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-8 sm:space-y-12">
           {/* Posts Section */}
           <div>
             <h2 className="text-2xl font-bold text-white mb-6">
@@ -88,7 +88,7 @@ const DashboardPage = ({ onBackToHome, onNewSearch }) => {
         </div>
       </div>
 
-      <footer className="bg-gray-900/50 border-t border-gray-800 py-8 mt-16">
+      <footer className="bg-black/80 border-t border-gray-900 py-8 mt-16">
         <div className="container mx-auto px-4 text-center">
           <p className="text-gray-400">
             Instagram Analytics Dashboard - Powered by AI

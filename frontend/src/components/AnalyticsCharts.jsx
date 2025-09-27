@@ -39,18 +39,27 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'top',
         labels: {
-          color: '#9CA3AF'
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          padding: window.innerWidth < 640 ? 10 : 20
         }
       },
     },
     scales: {
       x: {
         ticks: {
-          color: '#9CA3AF'
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          maxRotation: window.innerWidth < 640 ? 45 : 0
         },
         grid: {
           color: '#374151'
@@ -58,7 +67,10 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
       },
       y: {
         ticks: {
-          color: '#9CA3AF'
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          }
         },
         grid: {
           color: '#374151'
@@ -136,13 +148,17 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
 
   const doughnutOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'bottom',
         labels: {
           color: '#9CA3AF',
-          padding: 20,
+          padding: window.innerWidth < 640 ? 10 : 20,
           usePointStyle: true,
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          }
         }
       },
     },
@@ -152,36 +168,36 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
   return (
     <div className="space-y-8">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-white mb-4">Analytics Overview</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">Analytics Overview</h2>
         <p className="text-gray-400">Deep insights into engagement patterns and content performance</p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
         <Card className="space-y-4">
-          <h3 className="text-xl font-semibold text-white mb-4">Likes vs Comments vs Views</h3>
-          <div className="h-80">
+          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Likes vs Comments vs Views</h3>
+          <div className="h-64 sm:h-80">
             <Bar data={likesVsCommentsData} options={chartOptions} />
           </div>
         </Card>
 
         <Card className="space-y-4">
-          <h3 className="text-xl font-semibold text-white mb-4">Engagement Trend</h3>
-          <div className="h-80">
+          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Engagement Trend</h3>
+          <div className="h-64 sm:h-80">
             <Line data={engagementTrendData} options={chartOptions} />
           </div>
         </Card>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
         <Card className="space-y-4">
-          <h3 className="text-xl font-semibold text-white mb-4">Content Distribution</h3>
-          <div className="h-64">
+          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Content Distribution</h3>
+          <div className="h-48 sm:h-64">
             <Doughnut data={postPerformanceData} options={doughnutOptions} />
           </div>
         </Card>
 
         <Card className="space-y-4">
-          <h3 className="text-xl font-semibold text-white mb-4">Performance Metrics</h3>
+          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Performance Metrics</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center p-4 bg-gray-800/50 rounded-xl">
               <span className="text-gray-400">Best Performing Content</span>
@@ -203,22 +219,22 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
         </Card>
 
         <Card className="space-y-4">
-          <h3 className="text-xl font-semibold text-white mb-4">Quick Stats</h3>
+          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Quick Stats</h3>
           <div className="space-y-4">
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-400 mb-2">{formatNumber(profile?.engagement_rate || 0)}%</div>
+              <div className="text-2xl sm:text-3xl font-bold text-purple-400 mb-2">{formatNumber(profile?.engagement_rate || 0)}%</div>
               <div className="text-gray-400 text-sm">Engagement Rate</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400 mb-2">{formatNumber(profile?.avg_likes || 0)}</div>
+              <div className="text-2xl sm:text-3xl font-bold text-blue-400 mb-2">{formatNumber(profile?.avg_likes || 0)}</div>
               <div className="text-gray-400 text-sm">Avg Likes</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-400 mb-2">{formatNumber(profile?.avg_comments || 0)}</div>
+              <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-2">{formatNumber(profile?.avg_comments || 0)}</div>
               <div className="text-gray-400 text-sm">Avg Comments</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-yellow-400 mb-2">{reels?.reduce((sum, reel) => sum + (reel.views || 0), 0) || 0}</div>
+              <div className="text-2xl sm:text-3xl font-bold text-yellow-400 mb-2">{reels?.reduce((sum, reel) => sum + (reel.views || 0), 0) || 0}</div>
               <div className="text-gray-400 text-sm">Total Views</div>
             </div>
           </div>

@@ -40,11 +40,11 @@ const LandingPage = ({ onUserSearch, error }) => {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/20"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/40 via-black to-gray-900/40"></div>
         <div className="relative z-10">
           <div className="container mx-auto px-4 py-16">
             <div className="text-center mb-16">
-              <h1 className="text-6xl font-bold mb-6 bg-gradient-to-r from-purple-400 via-blue-400 to-green-400 bg-clip-text text-transparent">
+              <h1 className="text-6xl font-bold mb-6 bg-gradient-to-r from-white via-gray-200 to-gray-300 bg-clip-text text-transparent">
                 Instagram Analytics
               </h1>
               <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
@@ -69,7 +69,7 @@ const LandingPage = ({ onUserSearch, error }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 mb-16">
               {stats.map((stat, index) => (
                 <Card key={index} className="text-center" hover={false}>
                   <div className={`text-3xl font-bold mb-2 ${stat.color}`}>
@@ -82,7 +82,7 @@ const LandingPage = ({ onUserSearch, error }) => {
               ))}
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8 mb-16">
               {features.map((feature, index) => (
                 <Card key={index} gradient className="text-center group">
                   <div className="text-purple-400 mb-4 group-hover:text-purple-300 transition-colors flex justify-center">

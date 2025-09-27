@@ -148,6 +148,11 @@ const userSlice = createSlice({
       .addCase(fetchUserDashboard.pending, (state) => {
         state.loading = true;
         state.error = null;
+        // Clear previous user data when starting a new search
+        state.profile = initialState.profile;
+        state.posts = [];
+        state.reels = [];
+        state.currentUser = null;
       })
       .addCase(fetchUserDashboard.fulfilled, (state, action) => {
         state.loading = false;
@@ -166,6 +171,12 @@ const userSlice = createSlice({
       .addCase(refreshUserData.pending, (state) => {
         state.loading = true;
         state.error = null;
+        // Keep currentUser during refresh, but clear other data
+        const currentUsername = state.currentUser;
+        state.profile = initialState.profile;
+        state.posts = [];
+        state.reels = [];
+        state.currentUser = currentUsername;
       })
       .addCase(refreshUserData.fulfilled, (state, action) => {
         state.loading = false;

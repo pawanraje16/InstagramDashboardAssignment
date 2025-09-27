@@ -73,11 +73,11 @@ const ReelsGrid = ({ reels }) => {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {reels.map((reel, index) => (
         <Card key={reel.shortcode || index} className="group hover:bg-gray-800/50 transition-colors duration-200">
           {/* Reel Thumbnail Preview */}
-          <div className="relative aspect-[9/16] rounded-lg overflow-hidden mb-4 group cursor-pointer" onClick={() => openViewer(reel)}>
+          <div className="relative aspect-square rounded-lg overflow-hidden mb-4 group cursor-pointer" onClick={() => openViewer(reel)}>
             {/* Instagram Reel Thumbnail */}
             {reel.thumbnail_url || reel.display_url ? (
               <img
@@ -87,21 +87,21 @@ const ReelsGrid = ({ reels }) => {
                 onError={handleImageError}
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-pink-600 via-purple-600 to-indigo-600 flex items-center justify-center">
-                <PlayIcon className="h-20 w-20 text-white/90" />
+              <div className="w-full h-full bg-gradient-to-br from-purple-600 via-blue-600 to-green-600 flex items-center justify-center">
+                <PlayIcon className="h-16 w-16 text-white/90" />
               </div>
             )}
 
             {/* Fallback for broken images */}
-            <div className="hidden w-full h-full bg-gradient-to-br from-pink-600 via-purple-600 to-indigo-600 flex-col items-center justify-center text-white">
-              <PlayIcon className="h-20 w-20 text-white/90 mb-2" />
+            <div className="hidden w-full h-full bg-gradient-to-br from-purple-600 via-blue-600 to-green-600 flex-col items-center justify-center text-white">
+              <PlayIcon className="h-16 w-16 text-white/90 mb-2" />
               <span className="text-sm font-medium opacity-90">Instagram Reel</span>
             </div>
 
             {/* Play Button Overlay */}
             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/60 transition-all duration-200 flex items-center justify-center">
               <div className="text-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <PlayIcon className="h-12 w-12 mx-auto mb-1" />
+                <PlayIcon className="h-8 w-8 mx-auto mb-1" />
                 <span className="text-xs font-medium">Play Reel</span>
               </div>
             </div>

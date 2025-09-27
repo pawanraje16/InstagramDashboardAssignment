@@ -66,16 +66,16 @@ const ProfileHeader = ({ profile }) => {
                   <img
                     src={getProxiedImageUrl(profile.profile_pic_url, profile.profile_pic_cloudinary)}
                     alt={profile.full_name}
-                    className="w-32 h-32 rounded-full border-4 border-gray-700 shadow-xl"
+                    className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gray-700 shadow-xl"
                     onError={handleImageError}
                   />
-                  <div className="w-32 h-32 rounded-full border-4 border-gray-700 shadow-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center hidden">
-                    <UserIcon className="h-16 w-16 text-white/80" />
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gray-700 shadow-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center hidden">
+                    <UserIcon className="h-12 w-12 sm:h-16 sm:w-16 text-white/80" />
                   </div>
                 </>
               ) : (
-                <div className="w-32 h-32 rounded-full border-4 border-gray-700 shadow-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                  <UserIcon className="h-16 w-16 text-white/80" />
+                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gray-700 shadow-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                  <UserIcon className="h-12 w-12 sm:h-16 sm:w-16 text-white/80" />
                 </div>
               )}
               {profile.is_verified && (
@@ -85,14 +85,14 @@ const ProfileHeader = ({ profile }) => {
 
             <div className="flex-1 space-y-4">
               <div>
-                <h1 className="text-3xl font-bold text-white mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
                   {profile.full_name}
                 </h1>
-                <p className="text-purple-400 text-lg">@{profile.username}</p>
+                <p className="text-purple-400 text-base sm:text-lg">@{profile.username}</p>
               </div>
 
               {profile.bio && (
-                <p className="text-gray-300 text-lg leading-relaxed max-w-2xl">
+                <p className="text-gray-300 text-base sm:text-lg leading-relaxed max-w-2xl">
                   {profile.bio}
                 </p>
               )}
@@ -116,7 +116,7 @@ const ProfileHeader = ({ profile }) => {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
         {statCards.map((stat, index) => (
           <Card key={index} className="text-center group hover:scale-105 transition-transform duration-200">
             <div className={`w-12 h-12 rounded-2xl bg-gradient-to-r ${stat.gradient} flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-200`}>
