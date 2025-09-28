@@ -95,6 +95,14 @@ router.get('/top', [
 ], userController.getTopInfluencers);
 
 /**
+ * @route   GET /api/user/:username/dashboard
+ * @desc    Get complete dashboard data (profile + posts + reels) in one synchronous call
+ * @access  Public
+ * @param   username (string, required) - Instagram username
+ */
+router.get('/:username/dashboard', validateUsername, userController.getCompleteDashboard);
+
+/**
  * @route   GET /api/user/:username
  * @desc    Get user profile data (cached or fresh from Instagram)
  * @access  Public

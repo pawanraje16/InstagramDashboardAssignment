@@ -50,3 +50,7 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Technical documentation (sensitive information)
+TECHNICAL_DOCUMENTATION.md
+ANALYTICS_FORMULAS.md

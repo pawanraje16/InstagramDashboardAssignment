@@ -25,6 +25,7 @@ class UserController {
     this.getTopInfluencers = this.getTopInfluencers.bind(this);
     this.processUserThumbnails = this.processUserThumbnails.bind(this);
     this.processThumbnails = this.processThumbnails.bind(this);
+    this.getCompleteDashboard = this.getCompleteDashboard.bind(this);
   }
 
   /**
@@ -161,13 +162,14 @@ class UserController {
           const instagramData = await this.instagramService.getCompleteUserData(username, 12);
 
           // Save user profile
-          user = await this.databaseService.upsertUser(instagramData.profile);
+          user = await this.databaseService.upsertUser({
+            ...instagramData.profile,
+            analytics: instagramData.analytics
+          });
 
           // Save posts and reels
           await this.databaseService.savePosts(user._id, instagramData.posts);
 
-          // Save analytics
-          await this.databaseService.saveAnalytics(user._id, instagramData.analytics);
 
           // Update scraping status to completed
           await this.databaseService.updateScrapingStatus(user._id, 'completed');
@@ -259,13 +261,14 @@ class UserController {
           const instagramData = await this.instagramService.getCompleteUserData(username, 12);
 
           // Save user profile
-          user = await this.databaseService.upsertUser(instagramData.profile);
+          user = await this.databaseService.upsertUser({
+            ...instagramData.profile,
+            analytics: instagramData.analytics
+          });
 
           // Save posts and reels
           await this.databaseService.savePosts(user._id, instagramData.posts);
 
-          // Save analytics
-          await this.databaseService.saveAnalytics(user._id, instagramData.analytics);
 
           // Update scraping status to completed
           await this.databaseService.updateScrapingStatus(user._id, 'completed');
@@ -440,6 +443,146 @@ class UserController {
   }
 
   /**
+   * Get complete dashboard data (profile + posts + reels) in one synchronous call
+   * For new users, this will scrape, process thumbnails, calculate analytics, and return complete data
+   *
+   * @route GET /api/user/:username/dashboard
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getCompleteDashboard(req, res, next) {
+    try {
+      const { username } = req.params;
+
+      if (!username) {
+        throw ApiError.badRequest('Username parameter is required');
+      }
+
+      this.logger.info(`Getting complete dashboard data for: ${username}`);
+
+      // Check if user exists in database
+      let user = await this.databaseService.findUserByUsername(username);
+      let isNewUser = false;
+
+      if (!user) {
+        isNewUser = true;
+        this.logger.info(`New user ${username} - starting complete data processing...`);
+
+        // Fetch complete data from Instagram
+        const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+
+        // Save user profile with analytics
+        user = await this.databaseService.upsertUser({
+          ...instagramData.profile,
+          analytics: instagramData.analytics
+        });
+
+        // Save posts and reels
+        await this.databaseService.savePosts(user._id, instagramData.posts);
+
+        // Update scraping status to completed
+        await this.databaseService.updateScrapingStatus(user._id, 'completed');
+
+        // Process thumbnails synchronously to ensure complete data
+        try {
+          await this.processUserThumbnails(username);
+          this.logger.info(`✅ Complete processing finished for new user: ${username}`);
+        } catch (thumbnailError) {
+          this.logger.warn(`⚠️ Thumbnail processing failed for ${username}:`, thumbnailError);
+        }
+
+        // Get fresh data from database with processed thumbnails
+        user = await this.databaseService.findUserByUsername(username);
+      } else {
+        // Check rate limit for existing users
+        const rateLimitCheck = await this.databaseService.checkRateLimit(username);
+
+        if (!rateLimitCheck.canScrape) {
+          this.logger.info(`Returning cached dashboard data for ${username}`);
+        } else {
+          // Refresh existing user data
+          this.logger.info(`Refreshing dashboard data for existing user: ${username}`);
+
+          const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+
+          user = await this.databaseService.upsertUser({
+            ...instagramData.profile,
+            analytics: instagramData.analytics
+          });
+          await this.databaseService.savePosts(user._id, instagramData.posts);
+          await this.databaseService.updateScrapingStatus(user._id, 'completed');
+
+          // Process thumbnails synchronously
+          try {
+            await this.processUserThumbnails(username);
+          } catch (thumbnailError) {
+            this.logger.warn(`⚠️ Thumbnail processing failed for ${username}:`, thumbnailError);
+          }
+
+          user = await this.databaseService.findUserByUsername(username);
+        }
+      }
+
+      // Get posts and reels with pagination
+      const posts = await this.databaseService.getUserPosts(user._id, { limit: 12 });
+      const reels = await this.databaseService.getUserReels(user._id, { limit: 12 });
+
+      // Format complete dashboard response
+      const dashboardData = {
+        profile: {
+          username: user.instagram_username,
+          full_name: user.profile.full_name,
+          bio: user.profile.bio,
+          profile_pic_url: user.profile.profile_pic_url,
+          profile_pic_cloudinary: user.profile.profile_pic_cloudinary,
+          followers: user.profile.followers,
+          following: user.profile.following,
+          posts_count: user.profile.posts_count,
+          is_verified: user.profile.is_verified,
+          engagement_rate: user.analytics.engagement_rate,
+          avg_likes: user.analytics.avg_likes,
+          avg_comments: user.analytics.avg_comments
+        },
+        posts: posts.map(post => ({
+          type: 'post',
+          shortcode: post.shortcode,
+          media_type: post.media_type,
+          caption: post.caption,
+          display_url: post.display_url,
+          display_url_cloudinary: post.display_url_cloudinary,
+          likes: post.likes,
+          comments: post.comments,
+          posted_at: post.posted_at
+        })),
+        reels: reels.map(reel => ({
+          type: 'reel',
+          shortcode: reel.shortcode,
+          caption: reel.caption,
+          display_url: reel.display_url,
+          display_url_cloudinary: reel.display_url_cloudinary,
+          video_url: reel.video_url,
+          likes: reel.likes,
+          comments: reel.comments,
+          views: reel.views,
+          posted_at: reel.posted_at,
+          duration: reel.duration
+        }))
+      };
+
+      const response = isNewUser
+        ? ApiResponse.created(dashboardData, `Complete dashboard created for @${username}`)
+        : ApiResponse.success(dashboardData, `Complete dashboard data for @${username}`);
+
+      response.send(res);
+      this.logger.info(`✅ Successfully returned complete dashboard for ${username}`);
+
+    } catch (error) {
+      this.logger.error(`Error in getCompleteDashboard for ${req.params.username}:`, error);
+      next(error);
+    }
+  }
+
+  /**
    * Helper method to refresh user data from Instagram
    * @param {string} username - Instagram username
    * @param {Object} res - Express response object
@@ -470,8 +613,6 @@ class UserController {
       // Save posts and reels
       const savedContent = await this.databaseService.savePosts(user._id, instagramData.posts);
 
-      // Save analytics
-      const savedAnalytics = await this.databaseService.saveAnalytics(user._id, instagramData.analytics);
 
       // Update scraping status to completed
       await this.databaseService.updateScrapingStatus(user._id, 'completed');

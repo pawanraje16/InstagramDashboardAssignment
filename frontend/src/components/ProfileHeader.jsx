@@ -1,12 +1,22 @@
 import { CheckBadgeIcon, HeartIcon, ChatBubbleLeftIcon, PhotoIcon, EyeIcon, UserIcon } from '@heroicons/react/24/solid';
+import { useState } from 'react';
 import Card from './ui/Card';
 import { getProxiedImageUrl } from '../utils/imageProxy';
 
 const ProfileHeader = ({ profile }) => {
+  const [showViewer, setShowViewer] = useState(false);
+
   const handleImageError = (e) => {
     // Replace broken image with fallback
     e.target.style.display = 'none';
     e.target.nextElementSibling.style.display = 'flex';
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setShowViewer(!showViewer);
+    }
   };
   const formatNumber = (num) => {
     if (!num && num !== 0) return '0';
@@ -66,21 +76,53 @@ const ProfileHeader = ({ profile }) => {
                   <img
                     src={getProxiedImageUrl(profile.profile_pic_url, profile.profile_pic_cloudinary)}
                     alt={profile.full_name}
-                    className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gray-700 shadow-xl"
+                    className={`rounded-full border-4 border-gray-700 shadow-xl cursor-pointer transition-all duration-500 ease-in-out hover:border-gray-500 hover:shadow-2xl hover:shadow-black/40 z-10 transform focus:outline-none focus:ring-4 focus:ring-gray-500/50 ${
+                      showViewer
+                        ? 'w-48 h-48 sm:w-64 sm:h-64 border-gray-500 shadow-black/60 scale-100 hover:scale-105'
+                        : 'w-24 h-24 sm:w-32 sm:h-32 hover:scale-110'
+                    }`}
                     onError={handleImageError}
+                    onClick={() => setShowViewer(!showViewer)}
+                    onKeyDown={handleKeyPress}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={showViewer ? 'Click to shrink profile picture' : 'Click to enlarge profile picture'}
                   />
                   <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gray-700 shadow-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center hidden">
                     <UserIcon className="h-12 w-12 sm:h-16 sm:w-16 text-white/80" />
                   </div>
                 </>
               ) : (
-                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gray-700 shadow-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                  <UserIcon className="h-12 w-12 sm:h-16 sm:w-16 text-white/80" />
+                <div
+                  className={`rounded-full border-4 border-gray-700 shadow-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center cursor-pointer transition-all duration-500 ease-in-out hover:border-gray-500 hover:shadow-2xl hover:shadow-black/40 z-10 transform focus:outline-none focus:ring-4 focus:ring-gray-500/50 ${
+                    showViewer
+                      ? 'w-48 h-48 sm:w-64 sm:h-64 border-gray-500 shadow-black/60 scale-100 hover:scale-105'
+                      : 'w-24 h-24 sm:w-32 sm:h-32 hover:scale-110'
+                  }`}
+                  onClick={() => setShowViewer(!showViewer)}
+                  onKeyDown={handleKeyPress}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={showViewer ? 'Click to shrink profile picture' : 'Click to enlarge profile picture'}
+                >
+                  <UserIcon className={`text-white/80 ${showViewer ? 'h-24 w-24 sm:h-32 sm:w-32' : 'h-12 w-12 sm:h-16 sm:w-16'}`} />
                 </div>
               )}
+
               {profile.is_verified && (
-                <CheckBadgeIcon className="absolute -bottom-2 -right-2 h-8 w-8 text-blue-500 bg-black rounded-full" />
+                <CheckBadgeIcon className={`absolute text-blue-500 bg-black rounded-full transition-all duration-500 ease-in-out shadow-lg ${
+                  showViewer
+                    ? '-bottom-4 -right-4 h-12 w-12 shadow-black/50'
+                    : '-bottom-2 -right-2 h-8 w-8 shadow-black/40'
+                }`} />
               )}
+
+              {/* Click hint with improved styling */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-all duration-300 pointer-events-none">
+                <div className="bg-black/80 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full border border-gray-600 shadow-lg">
+                  {showViewer ? '✕ Click to shrink' : '🔍 Click to enlarge'}
+                </div>
+              </div>
             </div>
 
             <div className="flex-1 space-y-4">

@@ -24,24 +24,18 @@ const initialState = {
   currentUser: null
 };
 
-// Async thunk for fetching complete user dashboard data
+// Async thunk for fetching complete user dashboard data synchronously
 export const fetchUserDashboard = createAsyncThunk(
   'user/fetchDashboard',
   async (username, { rejectWithValue }) => {
     try {
-      // First, try to get the profile to check if user exists
-      const profileRes = await axios.get(`${API_BASE_URL}/user/${username}`);
-
-      // If profile exists, fetch posts and reels in parallel
-      const [postsRes, reelsRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/user/${username}/posts?limit=12`).catch(() => ({ data: { data: { items: [] } } })),
-        axios.get(`${API_BASE_URL}/user/${username}/reels?limit=12`).catch(() => ({ data: { data: { items: [] } } }))
-      ]);
+      // Use the new dashboard endpoint that handles everything synchronously
+      const response = await axios.get(`${API_BASE_URL}/user/${username}/dashboard`);
 
       return {
-        profile: profileRes.data.data,
-        posts: postsRes.data.data?.items || [],
-        reels: reelsRes.data.data?.items || []
+        profile: response.data.data.profile,
+        posts: response.data.data.posts || [],
+        reels: response.data.data.reels || []
       };
     } catch (error) {
       // Provide user-friendly error messages
@@ -61,24 +55,18 @@ export const fetchUserDashboard = createAsyncThunk(
   }
 );
 
-// Async thunk for refreshing user data
+// Async thunk for refreshing user data synchronously
 export const refreshUserData = createAsyncThunk(
   'user/refreshData',
   async (username, { rejectWithValue }) => {
     try {
-      await axios.post(`${API_BASE_URL}/user/${username}/refresh`);
-
-      // After refresh, fetch updated data
-      const [profileRes, postsRes, reelsRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/user/${username}`),
-        axios.get(`${API_BASE_URL}/user/${username}/posts?limit=12`).catch(() => ({ data: { data: { items: [] } } })),
-        axios.get(`${API_BASE_URL}/user/${username}/reels?limit=12`).catch(() => ({ data: { data: { items: [] } } }))
-      ]);
+      // Use the dashboard endpoint which handles refresh automatically
+      const response = await axios.get(`${API_BASE_URL}/user/${username}/dashboard`);
 
       return {
-        profile: profileRes.data.data,
-        posts: postsRes.data.data?.items || [],
-        reels: reelsRes.data.data?.items || []
+        profile: response.data.data.profile,
+        posts: response.data.data.posts || [],
+        reels: response.data.data.reels || []
       };
     } catch (error) {
       const status = error.response?.status;
