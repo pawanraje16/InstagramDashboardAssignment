@@ -71,11 +71,11 @@ class InstagramService {
    * @param {number} limit - Number of posts to fetch (max 50)
    * @returns {Array} Array of post data
    */
-  async getUserPosts(username, limit = 12) {
+  async getUserPosts(username, limit = 40) {
     try {
       logger.info(`Fetching ${limit} posts for @${username}`);
 
-      // First get profile to get posts data
+      // Strategy 1: Get initial posts from profile
       const profileUrl = `${this.baseURL}/api/v1/users/web_profile_info/?username=${username}`;
       const response = await this.makeRequest(profileUrl);
 
@@ -84,9 +84,75 @@ class InstagramService {
       }
 
       const user = response.data.data.user;
-      const posts = this.extractPostsFromProfile(user, limit);
+      let posts = this.extractPostsFromProfile(user, limit);
 
-      logger.info(`Successfully fetched ${posts.length} posts for @${username}`);
+      logger.info(`Strategy 1: Got ${posts.length} posts from profile`);
+
+      // Log the post IDs for debugging
+      const profilePostIds = posts.map(p => p.shortcode);
+      logger.info(`Profile post IDs: ${profilePostIds.join(', ')}`);
+
+      // Strategy 2: If we need more posts, try multiple additional approaches
+      if (posts.length < limit) {
+        logger.info(`Attempting to get ${limit - posts.length} more posts using aggressive methods`);
+
+        // Try pagination first (most likely to get truly additional posts)
+        const paginatedPosts = await this.fetchOlderPostsWithPagination(user.id, limit - posts.length);
+        if (paginatedPosts.length > 0) {
+          const paginatedPostIds = paginatedPosts.map(p => p.shortcode);
+          logger.info(`Paginated post IDs: ${paginatedPostIds.join(', ')}`);
+
+          const uniquePaginatedPosts = paginatedPosts.filter(paginatedPost =>
+            !profilePostIds.includes(paginatedPost.shortcode)
+          );
+
+          if (uniquePaginatedPosts.length > 0) {
+            posts = posts.concat(uniquePaginatedPosts);
+            logger.info(`Strategy 2a: Pagination added ${uniquePaginatedPosts.length} NEW posts. Total: ${posts.length}`);
+          } else {
+            logger.warn(`Strategy 2a: Pagination returned ${paginatedPosts.length} posts but they were all duplicates`);
+          }
+        }
+
+        // Try mobile web endpoint if still need more
+        const mobilePosts = await this.fetchFromMobileWeb(username, posts.length, limit - posts.length);
+        if (mobilePosts.length > 0) {
+          const mobilePostIds = mobilePosts.map(p => p.shortcode);
+          logger.info(`Mobile post IDs: ${mobilePostIds.join(', ')}`);
+
+          // Check for duplicates
+          const uniqueMobilePosts = mobilePosts.filter(mobilePost =>
+            !profilePostIds.includes(mobilePost.shortcode)
+          );
+
+          if (uniqueMobilePosts.length > 0) {
+            posts = posts.concat(uniqueMobilePosts);
+            logger.info(`Strategy 2a: Mobile web added ${uniqueMobilePosts.length} NEW posts. Total: ${posts.length}`);
+          } else {
+            logger.warn(`Strategy 2a: Mobile web returned ${mobilePosts.length} posts but they were all duplicates`);
+          }
+        }
+
+        // Try direct media endpoint if still need more
+        if (posts.length < limit) {
+          const mediaPosts = await this.fetchFromMediaEndpoint(user.id, posts.length, limit - posts.length);
+          if (mediaPosts.length > 0) {
+            posts = posts.concat(mediaPosts);
+            logger.info(`Strategy 2b: Media endpoint added ${mediaPosts.length} posts. Total: ${posts.length}`);
+          }
+        }
+
+        // Try GraphQL with different query hashes if still need more
+        if (posts.length < limit) {
+          const graphqlPosts = await this.fetchWithMultipleGraphQLQueries(user.id, posts.length, limit - posts.length);
+          if (graphqlPosts.length > 0) {
+            posts = posts.concat(graphqlPosts);
+            logger.info(`Strategy 2c: GraphQL added ${graphqlPosts.length} posts. Total: ${posts.length}`);
+          }
+        }
+      }
+
+      logger.info(`Successfully fetched ${posts.length} posts for @${username} (requested: ${limit})`);
       return posts;
 
     } catch (error) {
@@ -96,12 +162,322 @@ class InstagramService {
   }
 
   /**
+   * Attempt to fetch additional posts beyond the profile limit
+   * @param {string} username - Instagram username
+   * @param {number} skip - Number of posts to skip (posts already fetched)
+   * @param {number} limit - Number of additional posts to fetch
+   * @returns {Array} Array of additional post data
+   */
+  async getAdditionalPosts(username, skip = 12, limit = 28) {
+    try {
+      logger.info(`Attempting to fetch ${limit} additional posts for @${username}, skipping first ${skip}`);
+
+      // First get user ID from profile
+      const profileUrl = `${this.baseURL}/api/v1/users/web_profile_info/?username=${username}`;
+      const profileResponse = await this.makeRequest(profileUrl);
+
+      if (!profileResponse.data?.data?.user) {
+        throw new ApiError(404, `Instagram user @${username} not found`);
+      }
+
+      const user = profileResponse.data.data.user;
+      const userId = user.id;
+
+      // Try multiple approaches to get additional posts
+      let additionalPosts = [];
+
+      // Approach 1: Try user feed endpoint
+      try {
+        logger.info(`Trying user feed endpoint for ${username}`);
+        const feedPosts = await this.fetchFromUserFeed(userId, skip, limit);
+        if (feedPosts.length > 0) {
+          additionalPosts = feedPosts;
+          logger.info(`Successfully fetched ${feedPosts.length} posts from user feed`);
+        }
+      } catch (error) {
+        logger.warn('User feed approach failed:', error.message);
+      }
+
+      // Approach 2: Try GraphQL if feed failed
+      if (additionalPosts.length === 0) {
+        try {
+          logger.info(`Trying GraphQL approach for ${username}`);
+          const graphqlPosts = await this.fetchMorePostsViaGraphQL(userId, skip, limit);
+          if (graphqlPosts.length > 0) {
+            additionalPosts = graphqlPosts;
+            logger.info(`Successfully fetched ${graphqlPosts.length} posts from GraphQL`);
+          }
+        } catch (error) {
+          logger.warn('GraphQL approach failed:', error.message);
+        }
+      }
+
+      // Approach 3: Try alternative endpoints
+      if (additionalPosts.length === 0) {
+        try {
+          logger.info(`Trying alternative endpoints for ${username}`);
+          const altPosts = await this.fetchFromAlternativeEndpoints(userId, username, skip, limit);
+          if (altPosts.length > 0) {
+            additionalPosts = altPosts;
+            logger.info(`Successfully fetched ${altPosts.length} posts from alternative endpoints`);
+          }
+        } catch (error) {
+          logger.warn('Alternative endpoints failed:', error.message);
+        }
+      }
+
+      logger.info(`Total additional posts fetched for @${username}: ${additionalPosts.length}`);
+      return additionalPosts;
+
+    } catch (error) {
+      logger.error(`Error fetching additional posts for @${username}:`, error.message);
+      return []; // Return empty array instead of throwing to prevent breaking the main flow
+    }
+  }
+
+  /**
+   * Fetch posts from user feed endpoint
+   */
+  async fetchFromUserFeed(userId, skip, limit) {
+    const feedUrl = `${this.baseURL}/api/v1/feed/user/${userId}/?count=${limit + skip}&max_id=`;
+    const response = await this.makeRequest(feedUrl);
+
+    if (!response.data?.items) {
+      return [];
+    }
+
+    return response.data.items
+      .slice(skip)
+      .slice(0, limit)
+      .map(item => this.transformInstagramMediaItem(item))
+      .filter(post => post !== null);
+  }
+
+  /**
+   * Fetch posts from alternative Instagram endpoints
+   */
+  async fetchFromAlternativeEndpoints(userId, username, skip, limit) {
+    // Try the mobile endpoint
+    try {
+      const mobileUrl = `${this.baseURL}/${username}/?__a=1&max_id=`;
+      const response = await this.makeRequest(mobileUrl);
+
+      if (response.data?.graphql?.user?.edge_owner_to_timeline_media?.edges) {
+        const edges = response.data.graphql.user.edge_owner_to_timeline_media.edges;
+        return edges
+          .slice(skip)
+          .slice(0, limit)
+          .map(edge => this.transformPostData(edge.node))
+          .filter(post => post !== null);
+      }
+    } catch (error) {
+      logger.warn('Mobile endpoint failed:', error.message);
+    }
+
+    return [];
+  }
+
+  /**
+   * Fetch posts using pagination cursors to get older posts
+   */
+  async fetchOlderPostsWithPagination(userId, limit) {
+    try {
+      logger.info(`Trying pagination approach for user ${userId}`);
+
+      // First, get the profile to find pagination cursor
+      const profileUrl = `${this.baseURL}/api/v1/users/web_profile_info/?username=${userId}`;
+      const profileResponse = await this.makeRequest(profileUrl);
+
+      if (!profileResponse.data?.data?.user?.edge_owner_to_timeline_media?.page_info) {
+        logger.warn('No pagination info found in profile');
+        return [];
+      }
+
+      const pageInfo = profileResponse.data.data.user.edge_owner_to_timeline_media.page_info;
+
+      if (!pageInfo.has_next_page || !pageInfo.end_cursor) {
+        logger.warn('No next page available for pagination');
+        return [];
+      }
+
+      // Use the end cursor to fetch next page
+      const paginationUrl = `${this.baseURL}/graphql/query/`;
+      const variables = {
+        id: userId,
+        first: Math.min(limit, 50),
+        after: pageInfo.end_cursor
+      };
+
+      const params = new URLSearchParams({
+        query_hash: 'e769aa130647d2354c40ea6a439bfc08',
+        variables: JSON.stringify(variables)
+      });
+
+      const response = await this.makeRequest(`${paginationUrl}?${params}`);
+
+      if (response.data?.data?.user?.edge_owner_to_timeline_media?.edges) {
+        const edges = response.data.data.user.edge_owner_to_timeline_media.edges;
+        logger.info(`Pagination returned ${edges.length} posts`);
+
+        return edges.map(edge => this.transformPostData(edge.node)).filter(post => post !== null);
+      }
+
+      return [];
+    } catch (error) {
+      logger.warn('Pagination approach failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch posts from mobile web interface
+   */
+  async fetchFromMobileWeb(username, skip, limit) {
+    try {
+      logger.info(`Trying mobile web interface for ${username}`);
+
+      // Try different mobile endpoints
+      const mobileEndpoints = [
+        `${this.baseURL}/${username}/?__a=1`,
+        `${this.baseURL}/${username}/?__a=1&max_id=`,
+        `${this.baseURL}/${username}/channel/?__a=1`
+      ];
+
+      for (const endpoint of mobileEndpoints) {
+        try {
+          const response = await this.makeRequest(endpoint);
+
+          if (response.data?.graphql?.user?.edge_owner_to_timeline_media?.edges) {
+            const edges = response.data.graphql.user.edge_owner_to_timeline_media.edges;
+            logger.info(`Mobile endpoint returned ${edges.length} total posts`);
+
+            return edges
+              .slice(skip)
+              .slice(0, limit)
+              .map(edge => this.transformPostData(edge.node))
+              .filter(post => post !== null);
+          }
+        } catch (error) {
+          logger.warn(`Mobile endpoint ${endpoint} failed:`, error.message);
+          continue;
+        }
+      }
+
+      return [];
+    } catch (error) {
+      logger.warn('All mobile web approaches failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch posts from direct media endpoint
+   */
+  async fetchFromMediaEndpoint(userId, skip, limit) {
+    try {
+      logger.info(`Trying media endpoints for user ${userId}`);
+
+      const mediaEndpoints = [
+        `${this.baseURL}/api/v1/feed/user/${userId}/`,
+        `${this.baseURL}/api/v1/feed/user/${userId}/?count=${limit + skip}`,
+        `${this.baseURL}/api/v1/users/${userId}/media/?count=${limit + skip}`
+      ];
+
+      for (const endpoint of mediaEndpoints) {
+        try {
+          const response = await this.makeRequest(endpoint);
+
+          if (response.data?.items && Array.isArray(response.data.items)) {
+            logger.info(`Media endpoint returned ${response.data.items.length} items`);
+
+            return response.data.items
+              .slice(skip)
+              .slice(0, limit)
+              .map(item => this.transformInstagramMediaItem(item))
+              .filter(post => post !== null);
+          }
+        } catch (error) {
+          logger.warn(`Media endpoint ${endpoint} failed:`, error.message);
+          continue;
+        }
+      }
+
+      return [];
+    } catch (error) {
+      logger.warn('All media endpoint approaches failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch posts using multiple GraphQL query hashes
+   */
+  async fetchWithMultipleGraphQLQueries(userId, skip, limit) {
+    try {
+      logger.info(`Trying multiple GraphQL queries for user ${userId}`);
+
+      // Different query hashes that might work
+      const queryHashes = [
+        'e769aa130647d2354c40ea6a439bfc08', // Standard user media
+        '8c2a529969ee035a5063f2fc8602a0fd', // Alternative media query
+        '02e14f6a7812a876f7d133c9555b1151', // User timeline
+        '69cba40317214236af40e7efa697781d', // User posts
+      ];
+
+      for (const queryHash of queryHashes) {
+        try {
+          const variables = {
+            id: userId,
+            first: Math.min(limit + skip, 50)
+          };
+
+          const params = new URLSearchParams({
+            query_hash: queryHash,
+            variables: JSON.stringify(variables)
+          });
+
+          const graphqlUrl = `${this.baseURL}/graphql/query/?${params}`;
+          const response = await this.makeRequest(graphqlUrl);
+
+          // Try different response structures
+          let edges = null;
+          if (response.data?.data?.user?.edge_owner_to_timeline_media?.edges) {
+            edges = response.data.data.user.edge_owner_to_timeline_media.edges;
+          } else if (response.data?.data?.user?.edge_web_feed_timeline?.edges) {
+            edges = response.data.data.user.edge_web_feed_timeline.edges;
+          } else if (response.data?.data?.user?.edge_felix_video_timeline?.edges) {
+            edges = response.data.data.user.edge_felix_video_timeline.edges;
+          }
+
+          if (edges && edges.length > 0) {
+            logger.info(`GraphQL query ${queryHash} returned ${edges.length} posts`);
+
+            return edges
+              .slice(skip)
+              .slice(0, limit)
+              .map(edge => this.transformPostData(edge.node))
+              .filter(post => post !== null);
+          }
+        } catch (error) {
+          logger.warn(`GraphQL query ${queryHash} failed:`, error.message);
+          continue;
+        }
+      }
+
+      return [];
+    } catch (error) {
+      logger.warn('All GraphQL approaches failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * Get comprehensive user data (profile + posts + analytics)
    * @param {string} username - Instagram username
    * @param {number} postLimit - Number of posts to fetch
    * @returns {Object} Complete user data
    */
-  async getCompleteUserData(username, postLimit = 12) {
+  async getCompleteUserData(username, postLimit = 40) {
     try {
       logger.info(`Fetching complete data for @${username}`);
 
@@ -170,18 +546,26 @@ class InstagramService {
    * @param {number} limit - Number of posts to extract
    * @returns {Array} Array of transformed post data
    */
-  extractPostsFromProfile(user, limit = 12) {
+  extractPostsFromProfile(user, limit = 40) {
     try {
       if (!user.edge_owner_to_timeline_media?.edges) {
+        logger.warn('DEBUG: No edge_owner_to_timeline_media.edges found in user object');
         return [];
       }
 
-      const edges = user.edge_owner_to_timeline_media.edges.slice(0, limit);
+      const totalAvailable = user.edge_owner_to_timeline_media.edges.length;
+      logger.info(`DEBUG: extractPostsFromProfile - Available: ${totalAvailable}, Requested limit: ${limit}`);
 
-      return edges.map(edge => {
+      const edges = user.edge_owner_to_timeline_media.edges.slice(0, limit);
+      logger.info(`DEBUG: Sliced to ${edges.length} edges`);
+
+      const posts = edges.map(edge => {
         const node = edge.node;
         return this.transformPostData(node);
       });
+
+      logger.info(`DEBUG: Transformed ${posts.length} posts successfully`);
+      return posts;
 
     } catch (error) {
       logger.error('Error extracting posts from profile:', error);
@@ -557,6 +941,127 @@ class InstagramService {
 
     // Add current timestamp
     this.requestTimestamps.push(now);
+  }
+
+  /**
+   * Fetch additional posts via Instagram GraphQL API
+   * @param {string} userId - Instagram user ID
+   * @param {number} skip - Number of posts to skip
+   * @param {number} count - Number of additional posts to fetch
+   * @returns {Array} Array of additional post data
+   */
+  async fetchMorePostsViaGraphQL(userId, skip, count) {
+    try {
+      logger.info(`DEBUG: fetchMorePostsViaGraphQL called with userId: ${userId}, skip: ${skip}, count: ${count}`);
+
+      // Try using Instagram's media endpoint directly
+      const mediaUrl = `${this.baseURL}/api/v1/feed/user/${userId}/?count=${Math.min(count + skip, 50)}`;
+      logger.info(`DEBUG: Trying media endpoint: ${mediaUrl}`);
+
+      const response = await this.makeRequest(mediaUrl);
+
+      if (!response.data?.items) {
+        logger.warn(`No media items found for user ${userId} via media endpoint`);
+
+        // Fallback: Try GraphQL approach
+        return await this.fallbackGraphQLFetch(userId, skip, count);
+      }
+
+      const items = response.data.items || [];
+
+      // Skip the first 'skip' posts and take only what we need
+      const additionalPosts = items
+        .slice(skip)
+        .slice(0, count)
+        .map(item => this.transformInstagramMediaItem(item));
+
+      logger.info(`Successfully fetched ${additionalPosts.length} additional posts via media endpoint`);
+      return additionalPosts;
+
+    } catch (error) {
+      logger.warn('Media endpoint failed, trying GraphQL fallback:', error.message);
+      // Return empty array instead of throwing to prevent breaking the main flow
+      return await this.fallbackGraphQLFetch(userId, skip, count);
+    }
+  }
+
+  async fallbackGraphQLFetch(userId, skip, count) {
+    try {
+      // Use the older approach as fallback
+      const variables = {
+        id: userId,
+        first: Math.min(count + skip, 50)
+      };
+
+      const queryHash = 'e769aa130647d2354c40ea6a439bfc08';
+      const params = new URLSearchParams({
+        query_hash: queryHash,
+        variables: JSON.stringify(variables)
+      });
+
+      const graphqlUrl = `${this.baseURL}/graphql/query/?${params}`;
+      const response = await this.makeRequest(graphqlUrl);
+
+      if (!response.data?.data?.user?.edge_owner_to_timeline_media?.edges) {
+        logger.warn(`GraphQL fallback also failed for user ${userId}`);
+        return [];
+      }
+
+      const edges = response.data.data.user.edge_owner_to_timeline_media.edges;
+      const additionalPosts = edges
+        .slice(skip)
+        .slice(0, count)
+        .map(edge => this.transformPostData(edge.node));
+
+      logger.info(`GraphQL fallback fetched ${additionalPosts.length} additional posts`);
+      return additionalPosts;
+
+    } catch (error) {
+      logger.error('GraphQL fallback also failed:', error.message);
+      return [];
+    }
+  }
+
+  transformInstagramMediaItem(item) {
+    try {
+      // Transform Instagram media API response to our format
+      return {
+        id: item.id || item.pk,
+        shortcode: item.code,
+        media_type: this.getMediaTypeFromItem(item),
+        media_url: item.image_versions2?.candidates?.[0]?.url || item.video_versions?.[0]?.url,
+        thumbnail_url: item.image_versions2?.candidates?.[0]?.url,
+        caption: item.caption?.text || '',
+        likes: item.like_count || 0,
+        comments: item.comment_count || 0,
+        views: item.view_count || item.play_count || 0,
+        timestamp: new Date(item.taken_at * 1000).toISOString(),
+        location: item.location ? {
+          name: item.location.name,
+          city: item.location.city
+        } : null,
+        hashtags: this.extractHashtagsFromText(item.caption?.text || ''),
+        tagged_users: item.usertags?.in || [],
+        is_video: item.media_type === 2,
+        duration: item.video_duration || 0
+      };
+    } catch (error) {
+      logger.error('Error transforming media item:', error);
+      return null;
+    }
+  }
+
+  getMediaTypeFromItem(item) {
+    if (item.media_type === 2) return 'video';
+    if (item.media_type === 8) return 'carousel';
+    if (item.clips_metadata || (item.video_duration && item.video_duration < 60)) return 'reel';
+    return 'image';
+  }
+
+  extractHashtagsFromText(text) {
+    if (!text) return [];
+    const hashtags = text.match(/#[a-zA-Z0-9_]+/g) || [];
+    return hashtags.map(tag => tag.slice(1)); // Remove the # symbol
   }
 
   /**

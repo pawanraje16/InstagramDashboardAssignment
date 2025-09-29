@@ -51,8 +51,8 @@ export const instagramAPI = {
     try {
       const [profile, posts, reels, analytics] = await Promise.all([
         instagramAPI.getUserProfile(username),
-        instagramAPI.getUserPosts(username, { limit: 12 }),
-        instagramAPI.getUserReels(username, { limit: 12 }),
+        instagramAPI.getUserPosts(username, { limit: 40 }),
+        instagramAPI.getUserReels(username, { limit: 40 }),
         instagramAPI.getUserAnalytics(username)
       ]);
 

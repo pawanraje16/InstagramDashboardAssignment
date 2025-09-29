@@ -20,6 +20,7 @@ class UserController {
     this.refreshUser = this.refreshUser.bind(this);
     this.getUserPosts = this.getUserPosts.bind(this);
     this.getUserReels = this.getUserReels.bind(this);
+    this.getMorePosts = this.getMorePosts.bind(this);
     this.getUserAnalytics = this.getUserAnalytics.bind(this);
     this.searchUsers = this.searchUsers.bind(this);
     this.getTopInfluencers = this.getTopInfluencers.bind(this);
@@ -159,7 +160,7 @@ class UserController {
 
         try {
           // Fetch complete data from Instagram
-          const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+          const instagramData = await this.instagramService.getCompleteUserData(username, 40);
 
           // Save user profile
           user = await this.databaseService.upsertUser({
@@ -258,7 +259,7 @@ class UserController {
 
         try {
           // Fetch complete data from Instagram
-          const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+          const instagramData = await this.instagramService.getCompleteUserData(username, 40);
 
           // Save user profile
           user = await this.databaseService.upsertUser({
@@ -330,6 +331,52 @@ class UserController {
 
     } catch (error) {
       this.logger.error(`Error in getUserReels for ${req.params.username}:`, error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get additional posts for a user beyond the initial limit
+   *
+   * @route GET /api/user/:username/posts/more
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getMorePosts(req, res, next) {
+    try {
+      const { username } = req.params;
+      const { skip = 12, limit = 28 } = req.query;
+
+      if (!username) {
+        throw ApiError.badRequest('Username parameter is required');
+      }
+
+      this.logger.info(`Getting additional posts for user: ${username}, skip: ${skip}, limit: ${limit}`);
+
+      // Check if user exists in database
+      const user = await this.databaseService.findUserByUsername(username);
+      if (!user) {
+        throw new ApiError(404, `User @${username} not found. Please add the user first.`);
+      }
+
+      // Try to fetch additional posts from Instagram
+      const additionalPosts = await this.instagramService.getAdditionalPosts(username, parseInt(skip), parseInt(limit));
+
+      if (additionalPosts.length > 0) {
+        // Save the additional posts to database
+        await this.databaseService.savePosts(user._id, additionalPosts);
+        this.logger.info(`Saved ${additionalPosts.length} additional posts for ${username}`);
+      }
+
+      const response = ApiResponse.success(
+        additionalPosts,
+        `Found ${additionalPosts.length} additional posts for @${username}`
+      );
+
+      response.send(res);
+
+    } catch (error) {
+      this.logger.error(`Error in getMorePosts for ${req.params.username}:`, error);
       next(error);
     }
   }
@@ -469,7 +516,7 @@ class UserController {
         this.logger.info(`New user ${username} - starting complete data processing...`);
 
         // Fetch complete data from Instagram
-        const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+        const instagramData = await this.instagramService.getCompleteUserData(username, 40);
 
         // Save user profile with analytics
         user = await this.databaseService.upsertUser({
@@ -503,7 +550,7 @@ class UserController {
           // Refresh existing user data
           this.logger.info(`Refreshing dashboard data for existing user: ${username}`);
 
-          const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+          const instagramData = await this.instagramService.getCompleteUserData(username, 40);
 
           user = await this.databaseService.upsertUser({
             ...instagramData.profile,
@@ -524,8 +571,8 @@ class UserController {
       }
 
       // Get posts and reels with pagination
-      const posts = await this.databaseService.getUserPosts(user._id, { limit: 12 });
-      const reels = await this.databaseService.getUserReels(user._id, { limit: 12 });
+      const posts = await this.databaseService.getUserPosts(user._id, { limit: 40 });
+      const reels = await this.databaseService.getUserReels(user._id, { limit: 40 });
 
       // Format complete dashboard response
       const dashboardData = {
@@ -601,7 +648,7 @@ class UserController {
       this.logger.info(`Fetching fresh data from Instagram for: ${username}`);
 
       // Fetch complete data from Instagram
-      const instagramData = await this.instagramService.getCompleteUserData(username, 12);
+      const instagramData = await this.instagramService.getCompleteUserData(username, 40);
       console.log("below is user data")
       console.log("Instagram Data:", JSON.stringify(instagramData, null, 2));
       console.log("new line start");

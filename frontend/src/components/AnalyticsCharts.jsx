@@ -12,6 +12,22 @@ import {
 } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import Card from './ui/Card';
+import {
+  formatDisplayNumber,
+  formatNumber,
+  normalizeData,
+  calculateEngagementRate,
+  calculateAverageMetric,
+  getBestPerformingContentType,
+  getChronologicalContent
+} from '../utils/analyticsFormulas';
+
+// Instagram Icon Component
+const InstagramIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+  </svg>
+);
 
 ChartJS.register(
   CategoryScale,
@@ -26,16 +42,88 @@ ChartJS.register(
 );
 
 const AnalyticsCharts = ({ profile, posts, reels }) => {
-  // Process real data to create analytics
-  const formatNumber = (num) => {
-    if (!num && num !== 0) return 0;
-    return num;
-  };
+  // Get recent 10 posts/reels for charts - arranged chronologically (oldest to newest)
+  const recentContent = getChronologicalContent(posts, reels, 10);
 
-  // Get recent 10 posts/reels for charts
-  const recentContent = [...(posts || []), ...(reels || [])]
-    .sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at))
-    .slice(0, 10);
+  // Calculate real performance metrics using centralized formulas
+  const allContent = [...(posts || []), ...(reels || [])];
+
+  const avgViews = calculateAverageMetric(allContent, 'views');
+  const avgLikes = calculateAverageMetric(allContent, 'likes');
+  const avgComments = calculateAverageMetric(allContent, 'comments');
+
+  const bestContentType = getBestPerformingContentType(posts, reels);
+
+  // Calculate overall engagement rate
+  const totalLikes = allContent.reduce((sum, item) => sum + formatNumber(item.likes), 0);
+  const totalComments = allContent.reduce((sum, item) => sum + formatNumber(item.comments), 0);
+  const totalViews = allContent.reduce((sum, item) => sum + (formatNumber(item.views) || 0), 0);
+  const engagementRate = calculateEngagementRate(totalLikes, totalComments, totalViews).toFixed(1);
+
+  const chartOptionsWithTooltip = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          padding: window.innerWidth < 640 ? 10 : 20
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const datasetLabel = context.dataset.label;
+            const originalValue = context.dataset.originalData[context.dataIndex];
+            const normalizedValue = context.parsed.y.toFixed(1);
+
+            return `${datasetLabel}: ${formatDisplayNumber(originalValue)} (${normalizedValue}%)`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          maxRotation: window.innerWidth < 640 ? 45 : 0
+        },
+        grid: {
+          color: '#374151'
+        }
+      },
+      y: {
+        ticks: {
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          callback: function(value) {
+            return value.toFixed(1);
+          }
+        },
+        grid: {
+          color: '#374151'
+        },
+        title: {
+          display: true,
+          text: 'Normalized Scale (0-100%)',
+          color: '#9CA3AF',
+          font: {
+            size: 11
+          }
+        }
+      }
+    },
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  };
 
   const chartOptions = {
     responsive: true,
@@ -80,35 +168,52 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
     backgroundColor: 'rgba(0,0,0,0.8)',
   };
 
+  // Use centralized normalization function
+
+  const likesData = recentContent.map(item => formatNumber(item.likes));
+  const commentsData = recentContent.map(item => formatNumber(item.comments));
+  const viewsData = recentContent.map(item => formatNumber(item.views) || 0);
+
+  const normLikes = normalizeData(likesData);
+  const normComments = normalizeData(commentsData);
+  const normViews = normalizeData(viewsData);
+
   const likesVsCommentsData = {
-    labels: recentContent.map((item, idx) => `Content ${idx + 1}`),
+    labels: recentContent.map((item) => {
+      return new Date(item.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }),
     datasets: [
       {
         label: 'Likes',
-        data: recentContent.map(item => formatNumber(item.likes)),
+        data: normLikes.normalized,
         backgroundColor: 'rgba(168, 85, 247, 0.8)',
         borderColor: 'rgba(168, 85, 247, 1)',
         borderWidth: 2,
+        originalData: normLikes.original,
       },
       {
         label: 'Comments',
-        data: recentContent.map(item => formatNumber(item.comments)),
+        data: normComments.normalized,
         backgroundColor: 'rgba(59, 130, 246, 0.8)',
         borderColor: 'rgba(59, 130, 246, 1)',
         borderWidth: 2,
+        originalData: normComments.original,
       },
       {
         label: 'Views',
-        data: recentContent.map(item => formatNumber(item.views) || 0),
+        data: normViews.normalized,
         backgroundColor: 'rgba(16, 185, 129, 0.8)',
         borderColor: 'rgba(16, 185, 129, 1)',
         borderWidth: 2,
+        originalData: normViews.original,
       },
     ],
   };
 
   const engagementTrendData = {
-    labels: recentContent.map((item, idx) => `Content ${idx + 1}`),
+    labels: recentContent.map((item) => {
+      return new Date(item.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }),
     datasets: [
       {
         label: 'Engagement Rate (%)',
@@ -168,20 +273,29 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
   return (
     <div className="space-y-8">
       <div className="text-center mb-8">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">Analytics Overview</h2>
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <InstagramIcon className="w-8 h-8 text-purple-400" />
+          <h2 className="text-2xl sm:text-3xl font-bold text-white">Instagram Analytics Overview</h2>
+        </div>
         <p className="text-gray-400">Deep insights into engagement patterns and content performance</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
         <Card className="space-y-4">
-          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Likes vs Comments vs Views</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <InstagramIcon className="w-5 h-5 text-purple-400" />
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Likes vs Comments vs Views</h3>
+          </div>
           <div className="h-64 sm:h-80">
-            <Bar data={likesVsCommentsData} options={chartOptions} />
+            <Bar data={likesVsCommentsData} options={chartOptionsWithTooltip} />
           </div>
         </Card>
 
         <Card className="space-y-4">
-          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Engagement Trend</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <InstagramIcon className="w-5 h-5 text-blue-400" />
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Engagement Trend</h3>
+          </div>
           <div className="h-64 sm:h-80">
             <Line data={engagementTrendData} options={chartOptions} />
           </div>
@@ -190,36 +304,45 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
         <Card className="space-y-4">
-          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Content Distribution</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <InstagramIcon className="w-5 h-5 text-green-400" />
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Content Distribution</h3>
+          </div>
           <div className="h-48 sm:h-64">
             <Doughnut data={postPerformanceData} options={doughnutOptions} />
           </div>
         </Card>
 
         <Card className="space-y-4">
-          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Performance Metrics</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <InstagramIcon className="w-5 h-5 text-yellow-400" />
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Performance Metrics</h3>
+          </div>
           <div className="space-y-4">
             <div className="flex justify-between items-center p-4 bg-gray-800/50 rounded-xl">
               <span className="text-gray-400">Best Performing Content</span>
-              <span className="text-purple-400 font-semibold">Reels</span>
+              <span className="text-purple-400 font-semibold">{bestContentType}</span>
             </div>
             <div className="flex justify-between items-center p-4 bg-gray-800/50 rounded-xl">
-              <span className="text-gray-400">Peak Engagement Time</span>
-              <span className="text-blue-400 font-semibold">6-9 PM</span>
+              <span className="text-gray-400">Average Engagement Rate</span>
+              <span className="text-blue-400 font-semibold">{engagementRate}%</span>
             </div>
             <div className="flex justify-between items-center p-4 bg-gray-800/50 rounded-xl">
-              <span className="text-gray-400">Average Reach</span>
-              <span className="text-green-400 font-semibold">45.2K</span>
+              <span className="text-gray-400">Average Reach (Views)</span>
+              <span className="text-green-400 font-semibold">{formatDisplayNumber(avgViews)}</span>
             </div>
             <div className="flex justify-between items-center p-4 bg-gray-800/50 rounded-xl">
-              <span className="text-gray-400">Growth Rate</span>
-              <span className="text-yellow-400 font-semibold">+12.5%</span>
+              <span className="text-gray-400">Total Content</span>
+              <span className="text-yellow-400 font-semibold">{allContent.length} posts</span>
             </div>
           </div>
         </Card>
 
         <Card className="space-y-4">
-          <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Quick Stats</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <InstagramIcon className="w-5 h-5 text-pink-400" />
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Quick Stats</h3>
+          </div>
           <div className="space-y-4">
             <div className="text-center">
               <div className="text-2xl sm:text-3xl font-bold text-purple-400 mb-2">{formatNumber(profile?.engagement_rate || 0)}%</div>

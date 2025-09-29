@@ -91,7 +91,7 @@ export const loadMorePosts = createAsyncThunk(
   async ({ username, page }, { rejectWithValue }) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/user/${username}/posts`, {
-        params: { page, limit: 12 }
+        params: { page, limit: 40 }
       });
       return response.data.data?.items || [];
     } catch (error) {
@@ -106,7 +106,7 @@ export const loadMoreReels = createAsyncThunk(
   async ({ username, page }, { rejectWithValue }) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/user/${username}/reels`, {
-        params: { page, limit: 12 }
+        params: { page, limit: 40 }
       });
       return response.data.data?.items || [];
     } catch (error) {

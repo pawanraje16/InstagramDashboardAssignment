@@ -147,6 +147,20 @@ router.get('/:username/reels', [
 ], userController.getUserReels);
 
 /**
+ * @route   GET /api/user/:username/posts/more
+ * @desc    Get additional posts beyond the initial limit
+ * @access  Public
+ * @param   username (string, required) - Instagram username
+ * @query   skip (number, optional) - Number of posts to skip (default: 12)
+ * @query   limit (number, optional) - Number of additional posts to fetch (default: 28, max: 50)
+ */
+router.get('/:username/posts/more', [
+  ...validateUsername,
+  query('skip').optional().isInt({ min: 0 }).withMessage('Skip must be a non-negative integer'),
+  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50')
+], userController.getMorePosts);
+
+/**
  * @route   GET /api/user/:username/analytics
  * @desc    Get user's analytics data
  * @access  Public
