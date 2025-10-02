@@ -21,7 +21,8 @@ const UserSchema = new mongoose.Schema({
   profile: {
     full_name: String,
     bio: String, // Instagram biography/description
-    profile_pic_url: String,
+    profile_pic_url: String, // Current Instagram URL
+    profile_pic_url_cached: String, // Last processed Instagram URL (for change detection)
     profile_pic_cloudinary: String, // Cloudinary URL for profile picture
     is_verified: { type: Boolean, default: false },
     followers: { type: Number, default: 0 },

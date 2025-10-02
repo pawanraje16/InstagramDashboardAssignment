@@ -99,24 +99,23 @@ export const standardizeData = (data) => {
 /**
  * Engagement Rate Calculation
  *
- * Formula: ((likes + comments) / views) * 100
- * Alternative: ((likes + comments) / followers) * 100
+ * Formula: ((likes + comments) / followers) * 100
  *
- * Purpose: Measures audience interaction relative to reach
+ * Purpose: Measures audience interaction relative to follower base
  * - Higher percentage = more engaging content
  * - Industry average: 1-3% is good, 3%+ is excellent
  *
  * @param {number} likes - Number of likes
  * @param {number} comments - Number of comments
- * @param {number} views - Number of views (or followers as fallback)
+ * @param {number} followers - Number of followers
  * @returns {number} Engagement rate as percentage
  */
-export const calculateEngagementRate = (likes, comments, views) => {
+export const calculateEngagementRate = (likes, comments, followers) => {
   const totalEngagement = formatNumber(likes) + formatNumber(comments);
-  const reach = formatNumber(views) || formatNumber(likes); // Fallback to likes if no views
+  const followerCount = formatNumber(followers);
 
-  if (reach === 0) return 0;
-  return ((totalEngagement / reach) * 100);
+  if (followerCount === 0) return 0;
+  return ((totalEngagement / followerCount) * 100);
 };
 
 /**

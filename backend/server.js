@@ -174,7 +174,9 @@ class Server {
           'Access-Control-Allow-Origin': '*'
         });
 
-        response.body.pipe(res);
+        // Convert fetch response to buffer and send
+        const buffer = await response.arrayBuffer();
+        res.send(Buffer.from(buffer));
       } catch (error) {
         logger.error('Image proxy error:', error);
         res.status(500).json({ error: 'Failed to proxy image' });

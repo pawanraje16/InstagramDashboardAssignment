@@ -625,6 +625,71 @@ class UserController {
 
     } catch (error) {
       this.logger.error(`Error in getCompleteDashboard for ${req.params.username}:`, error);
+
+      // If Instagram is unavailable and we have cached data, return it
+      if (existingUser && (error.statusCode === 503 || error.statusCode === 429 || error.statusCode === 500)) {
+        this.logger.warn(`Instagram service unavailable. Returning cached dashboard for ${username}`);
+
+        try {
+          // Get cached posts and reels
+          const posts = await this.databaseService.getUserPosts(existingUser._id, { limit: 40 });
+          const reels = await this.databaseService.getUserReels(existingUser._id, { limit: 40 });
+
+          const cachedDashboard = {
+            profile: {
+              username: existingUser.instagram_username,
+              full_name: existingUser.profile.full_name,
+              bio: existingUser.profile.bio,
+              profile_pic_url: existingUser.profile.profile_pic_url,
+              profile_pic_cloudinary: existingUser.profile.profile_pic_cloudinary,
+              followers: existingUser.profile.followers,
+              following: existingUser.profile.following,
+              posts_count: existingUser.profile.posts_count,
+              is_verified: existingUser.profile.is_verified,
+              engagement_rate: existingUser.analytics.engagement_rate,
+              avg_likes: existingUser.analytics.avg_likes,
+              avg_comments: existingUser.analytics.avg_comments
+            },
+            posts: posts.map(post => ({
+              type: 'post',
+              shortcode: post.shortcode,
+              media_type: post.media_type,
+              caption: post.caption,
+              display_url: post.display_url,
+              display_url_cloudinary: post.display_url_cloudinary,
+              likes: post.likes,
+              comments: post.comments,
+              posted_at: post.posted_at
+            })),
+            reels: reels.map(reel => ({
+              type: 'reel',
+              shortcode: reel.shortcode,
+              caption: reel.caption,
+              display_url: reel.display_url,
+              display_url_cloudinary: reel.display_url_cloudinary,
+              video_url: reel.video_url,
+              likes: reel.likes,
+              comments: reel.comments,
+              views: reel.views,
+              posted_at: reel.posted_at,
+              duration: reel.duration
+            }))
+          };
+
+          const response = ApiResponse.cached(
+            cachedDashboard,
+            `Instagram temporarily unavailable. Data cached since ${existingUser.last_scraped}`,
+            `Cached dashboard for @${username}`
+          );
+
+          response.send(res);
+          this.logger.info(`✅ Returned cached dashboard for ${username} due to Instagram unavailability`);
+          return;
+        } catch (cacheError) {
+          this.logger.error(`Failed to return cached dashboard:`, cacheError);
+        }
+      }
+
       next(error);
     }
   }
@@ -717,6 +782,43 @@ class UserController {
       }
 
       this.logger.error(`Failed to refresh data for ${username}:`, error);
+
+      // If Instagram is temporarily unavailable and we have cached data, return it
+      if (existingUser && (error.statusCode === 503 || error.statusCode === 429 || error.statusCode === 500)) {
+        this.logger.warn(`Instagram service unavailable. Returning cached data for ${username}`);
+
+        const cachedResponse = {
+          // Basic Information (mandatory)
+          username: existingUser.instagram_username,
+          full_name: existingUser.profile.full_name,
+          bio: existingUser.profile.bio,
+          profile_pic_url: existingUser.profile.profile_pic_url,
+          profile_pic_cloudinary: existingUser.profile.profile_pic_cloudinary,
+          followers: existingUser.profile.followers,
+          following: existingUser.profile.following,
+          posts_count: existingUser.profile.posts_count,
+          is_verified: existingUser.profile.is_verified,
+
+          // Engagement & Analytics (mandatory)
+          engagement_rate: existingUser.analytics.engagement_rate,
+          avg_likes: existingUser.analytics.avg_likes,
+          avg_comments: existingUser.analytics.avg_comments
+        };
+
+        const response = ApiResponse.cached(
+          cachedResponse,
+          `Instagram temporarily unavailable. Data cached since ${existingUser.last_scraped}`,
+          `Cached profile data for @${username}`
+        );
+
+        if (!res.headersSent) {
+          response.send(res);
+          this.logger.info(`✅ Returned cached data for ${username} due to Instagram unavailability`);
+          return;
+        }
+      }
+
+      // If no cached data available or different error, throw
       throw error;
     }
   }
@@ -738,12 +840,24 @@ class UserController {
       const thumbnailsToProcess = [];
 
       // Process profile picture thumbnail
-      if (user.profile.profile_pic_url && !user.profile.profile_pic_cloudinary) {
+      // Download if:
+      // 1. No Cloudinary URL yet (first time), OR
+      // 2. Instagram URL changed (user updated profile pic)
+      const profilePicChanged = user.profile.profile_pic_url_cached &&
+                                user.profile.profile_pic_url !== user.profile.profile_pic_url_cached;
+
+      if (user.profile.profile_pic_url && (!user.profile.profile_pic_cloudinary || profilePicChanged)) {
+        this.logger.info(`📸 ${profilePicChanged ? 'Profile picture changed' : 'New profile picture'} for ${username}, will download`);
         thumbnailsToProcess.push({
           url: user.profile.profile_pic_url,
           folder: 'thumbnails/profiles',
-          publicId: imageService.generatePublicId(user.profile.profile_pic_url, `profile_${user.instagram_username}`)
+          publicId: imageService.generatePublicId(user.profile.profile_pic_url, `profile_${user.instagram_username}`),
+          userId: user._id,
+          oldCloudinaryUrl: user.profile.profile_pic_cloudinary, // Keep for fallback if download fails
+          fieldType: 'profile'
         });
+      } else if (user.profile.profile_pic_cloudinary) {
+        this.logger.info(`✅ Profile picture unchanged for ${username}, skipping download`);
       }
 
       // Get posts and reels to process
@@ -751,25 +865,35 @@ class UserController {
       const reels = await this.databaseService.getUserReels(user._id, { limit: 20 });
 
       // Process post thumbnails
+      // Download if: No Cloudinary URL OR Instagram URL changed
       for (const post of posts) {
-        if (post.display_url && !post.display_url_cloudinary) {
+        const urlChanged = post.display_url_cached && post.display_url !== post.display_url_cached;
+
+        if (post.display_url && (!post.display_url_cloudinary || urlChanged)) {
           thumbnailsToProcess.push({
             url: post.display_url,
             folder: 'thumbnails/posts',
             publicId: imageService.generatePublicId(post.display_url, `post_${post.shortcode}`),
-            postId: post._id
+            postId: post._id,
+            oldCloudinaryUrl: post.display_url_cloudinary, // Keep for fallback if download fails
+            fieldType: 'post'
           });
         }
       }
 
       // Process reel thumbnails
+      // Download if: No Cloudinary URL OR Instagram URL changed
       for (const reel of reels) {
-        if (reel.display_url && !reel.display_url_cloudinary) {
+        const urlChanged = reel.display_url_cached && reel.display_url !== reel.display_url_cached;
+
+        if (reel.display_url && (!reel.display_url_cloudinary || urlChanged)) {
           thumbnailsToProcess.push({
             url: reel.display_url,
             folder: 'thumbnails/reels',
             publicId: imageService.generatePublicId(reel.display_url, `reel_${reel.shortcode}`),
-            reelId: reel._id
+            reelId: reel._id,
+            oldCloudinaryUrl: reel.display_url_cloudinary, // Keep for fallback if download fails
+            fieldType: 'reel'
           });
         }
       }
@@ -790,32 +914,44 @@ class UserController {
         const thumbnailData = thumbnailsToProcess[i];
 
         if (result.cloudinary) {
+          // Download succeeded - update with new Cloudinary URL and mark Instagram URL as cached
           processedCount++;
 
           try {
-            if (thumbnailData.publicId.startsWith('profile_')) {
+            if (thumbnailData.fieldType === 'profile') {
               // Update user profile picture
               await this.databaseService.updateUser(user._id, {
-                'profile.profile_pic_cloudinary': result.cloudinary
+                'profile.profile_pic_cloudinary': result.cloudinary,
+                'profile.profile_pic_url_cached': thumbnailData.url // Mark this URL as processed
               });
               this.logger.info(`✅ Updated profile picture for ${username}`);
 
             } else if (thumbnailData.postId) {
               // Update post thumbnail
               await this.databaseService.updatePost(thumbnailData.postId, {
-                display_url_cloudinary: result.cloudinary
+                display_url_cloudinary: result.cloudinary,
+                display_url_cached: thumbnailData.url // Mark this URL as processed
               });
               this.logger.info(`✅ Updated post thumbnail: ${thumbnailData.publicId}`);
 
             } else if (thumbnailData.reelId) {
               // Update reel thumbnail
               await this.databaseService.updateReel(thumbnailData.reelId, {
-                display_url_cloudinary: result.cloudinary
+                display_url_cloudinary: result.cloudinary,
+                display_url_cached: thumbnailData.url // Mark this URL as processed
               });
               this.logger.info(`✅ Updated reel thumbnail: ${thumbnailData.publicId}`);
             }
           } catch (updateError) {
             this.logger.error(`❌ Failed to update database for ${thumbnailData.publicId}:`, updateError);
+          }
+        } else {
+          // Download failed - keep old Cloudinary URL if it exists
+          if (thumbnailData.oldCloudinaryUrl) {
+            this.logger.warn(`⚠️ Download failed for ${thumbnailData.publicId}, keeping old Cloudinary URL`);
+            // No need to update - old URL is already in database
+          } else {
+            this.logger.error(`❌ Download failed for ${thumbnailData.publicId} and no fallback available`);
           }
         }
       }

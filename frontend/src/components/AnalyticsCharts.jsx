@@ -54,11 +54,21 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
 
   const bestContentType = getBestPerformingContentType(posts, reels);
 
-  // Calculate overall engagement rate
-  const totalLikes = allContent.reduce((sum, item) => sum + formatNumber(item.likes), 0);
-  const totalComments = allContent.reduce((sum, item) => sum + formatNumber(item.comments), 0);
-  const totalViews = allContent.reduce((sum, item) => sum + (formatNumber(item.views) || 0), 0);
-  const engagementRate = calculateEngagementRate(totalLikes, totalComments, totalViews).toFixed(1);
+  // Calculate average engagement rate (calculate per post, then average)
+  const followers = profile?.profile?.followers || 1; // Use follower count
+
+  // Calculate engagement rate for each post, then average them
+  const allEngagementRates = allContent.map(item =>
+    calculateEngagementRate(
+      formatNumber(item.likes),
+      formatNumber(item.comments),
+      followers
+    )
+  );
+
+  const engagementRate = allEngagementRates.length > 0
+    ? (allEngagementRates.reduce((sum, rate) => sum + rate, 0) / allEngagementRates.length).toFixed(1)
+    : '0.0';
 
   const chartOptionsWithTooltip = {
     responsive: true,
@@ -168,6 +178,71 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
     backgroundColor: 'rgba(0,0,0,0.8)',
   };
 
+  // Chart options for Engagement Trend with tooltip showing original values
+  const engagementTrendOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          padding: window.innerWidth < 640 ? 10 : 20
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const originalValue = context.dataset.originalData[context.dataIndex];
+            const normalizedValue = context.parsed.y.toFixed(1);
+
+            return `Engagement Rate: ${originalValue.toFixed(2)}% (Normalized: ${normalizedValue}%)`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          maxRotation: window.innerWidth < 640 ? 45 : 0
+        },
+        grid: {
+          color: '#374151'
+        }
+      },
+      y: {
+        ticks: {
+          color: '#9CA3AF',
+          font: {
+            size: window.innerWidth < 640 ? 10 : 12
+          },
+          callback: function(value) {
+            return value.toFixed(1);
+          }
+        },
+        grid: {
+          color: '#374151'
+        },
+        title: {
+          display: true,
+          text: 'Normalized Scale (0-100%)',
+          color: '#9CA3AF',
+          font: {
+            size: 11
+          }
+        }
+      }
+    },
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  };
+
   // Use centralized normalization function
 
   const likesData = recentContent.map(item => formatNumber(item.likes));
@@ -210,6 +285,19 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
     ],
   };
 
+  // Calculate engagement rates for each post
+  const engagementRates = recentContent.map(item => {
+    const engagement = calculateEngagementRate(
+      formatNumber(item.likes),
+      formatNumber(item.comments),
+      followers
+    );
+    return parseFloat(engagement.toFixed(2));
+  });
+
+  // Normalize engagement rates for better visualization
+  const normEngagementRates = normalizeData(engagementRates);
+
   const engagementTrendData = {
     labels: recentContent.map((item) => {
       return new Date(item.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -217,10 +305,8 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
     datasets: [
       {
         label: 'Engagement Rate (%)',
-        data: recentContent.map(item => {
-          const engagement = ((formatNumber(item.likes) + formatNumber(item.comments)) / Math.max(formatNumber(item.views) || formatNumber(item.likes), 1)) * 100;
-          return parseFloat(engagement.toFixed(2));
-        }),
+        data: normEngagementRates.normalized,
+        originalData: normEngagementRates.original, // Store original values for tooltip
         borderColor: 'rgba(249, 115, 22, 1)',
         backgroundColor: 'rgba(249, 115, 22, 0.2)',
         fill: true,
@@ -297,7 +383,7 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
             <h3 className="text-lg sm:text-xl font-semibold text-white">Engagement Trend</h3>
           </div>
           <div className="h-64 sm:h-80">
-            <Line data={engagementTrendData} options={chartOptions} />
+            <Line data={engagementTrendData} options={engagementTrendOptions} />
           </div>
         </Card>
       </div>

@@ -28,7 +28,8 @@ const ReelSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  display_url: String, // Reel thumbnail
+  display_url: String, // Reel thumbnail (current Instagram URL)
+  display_url_cached: String, // Last processed Instagram URL (for change detection)
   display_url_cloudinary: String, // Cloudinary URL for reel thumbnail
   video_url: String, // Reel video URL
 

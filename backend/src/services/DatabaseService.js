@@ -110,10 +110,24 @@ class DatabaseService {
           const isReel = postData.views !== undefined || postData.hashtags || postData.tags;
 
           if (isReel) {
+            // Check if reel already exists to preserve cached URLs
+            const existingReel = await Reel.findOne({ instagram_post_id: postData.instagram_post_id });
+
+            // Preserve Cloudinary and cached URLs if they exist
+            const updateData = { ...itemWithUserId };
+            if (existingReel) {
+              if (existingReel.display_url_cloudinary) {
+                updateData.display_url_cloudinary = existingReel.display_url_cloudinary;
+              }
+              if (existingReel.display_url_cached) {
+                updateData.display_url_cached = existingReel.display_url_cached;
+              }
+            }
+
             // Save as reel
             const reel = await Reel.findOneAndUpdate(
               { instagram_post_id: postData.instagram_post_id },
-              { $set: itemWithUserId },
+              { $set: updateData },
               {
                 new: true,
                 upsert: true,
@@ -122,10 +136,24 @@ class DatabaseService {
             );
             savedReels.push(reel);
           } else {
+            // Check if post already exists to preserve cached URLs
+            const existingPost = await Post.findOne({ instagram_post_id: postData.instagram_post_id });
+
+            // Preserve Cloudinary and cached URLs if they exist
+            const updateData = { ...itemWithUserId };
+            if (existingPost) {
+              if (existingPost.display_url_cloudinary) {
+                updateData.display_url_cloudinary = existingPost.display_url_cloudinary;
+              }
+              if (existingPost.display_url_cached) {
+                updateData.display_url_cached = existingPost.display_url_cached;
+              }
+            }
+
             // Save as post
             const post = await Post.findOneAndUpdate(
               { instagram_post_id: postData.instagram_post_id },
-              { $set: itemWithUserId },
+              { $set: updateData },
               {
                 new: true,
                 upsert: true,

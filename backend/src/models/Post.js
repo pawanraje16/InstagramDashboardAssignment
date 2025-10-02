@@ -34,7 +34,8 @@ const PostSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  display_url: String, // Post image/thumbnail
+  display_url: String, // Post image/thumbnail (current Instagram URL)
+  display_url_cached: String, // Last processed Instagram URL (for change detection)
   display_url_cloudinary: String, // Cloudinary URL for post image
 
   // Engagement Metrics (Post-Level Data - Important)

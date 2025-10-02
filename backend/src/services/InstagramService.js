@@ -652,15 +652,22 @@ class InstagramService {
    */
   calculateAnalytics(profile, posts, reels) {
     try {
-      const totalLikes = posts.reduce((sum, post) => sum + (post.likes || 0), 0);
-      const totalComments = posts.reduce((sum, post) => sum + (post.comments || 0), 0);
+      // Calculate totals from all content (posts + reels)
+      const allContent = [...posts, ...reels];
+
+      const totalLikes = allContent.reduce((sum, item) => sum + (item.likes || 0), 0);
+      const totalComments = allContent.reduce((sum, item) => sum + (item.comments || 0), 0);
       const totalViews = reels.reduce((sum, reel) => sum + (reel.views || 0), 0);
 
-      const avgLikes = posts.length > 0 ? Math.round(totalLikes / posts.length) : 0;
-      const avgComments = posts.length > 0 ? Math.round(totalComments / posts.length) : 0;
+      // Average across all content
+      const contentCount = allContent.length || 1;
+      const avgLikes = Math.round(totalLikes / contentCount);
+      const avgComments = Math.round(totalComments / contentCount);
 
-      const engagementRate = profile.profile.followers > 0 && posts.length > 0
-        ? (((totalLikes + totalComments) / posts.length) / profile.profile.followers * 100)
+      // Engagement rate: average engagement per post / followers
+      const avgEngagementPerPost = (totalLikes + totalComments) / contentCount;
+      const engagementRate = profile.profile.followers > 0
+        ? (avgEngagementPerPost / profile.profile.followers * 100)
         : 0;
 
       const contentBreakdown = {
