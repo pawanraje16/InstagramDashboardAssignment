@@ -48,7 +48,7 @@ const AnalyticsCharts = ({ profile, posts, reels }) => {
   // Calculate real performance metrics using centralized formulas
   const allContent = [...(posts || []), ...(reels || [])];
 
-  const avgViews = calculateAverageMetric(allContent, 'views');
+  const avgViews = calculateAverageMetric(reels || [], 'views'); // Only calculate from reels since we only have views for reels
   const avgLikes = calculateAverageMetric(allContent, 'likes');
   const avgComments = calculateAverageMetric(allContent, 'comments');
 
